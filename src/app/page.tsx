@@ -7,8 +7,9 @@ import { AuditAreaScope, AreaType } from "@/components/AuditAreaScope";
 import { ThreeMonthTimeline, ChecklistItem } from "@/components/ThreeMonthTimeline";
 import { WeeklyCadenceSection, WeeklyCadenceItem } from "@/components/WeeklyCadenceSection";
 import { AuditReportBuilder, AuditReportItem } from "@/components/AuditReportBuilder";
+import { DownloadResumeSection } from "@/components/DownloadResumeSection";
 import { SummaryDashboard } from "@/components/SummaryDashboard";
-import { RefreshCw, CheckCircle2, ShieldAlert } from "lucide-react";
+import { RefreshCw, CheckCircle2 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -339,6 +340,12 @@ export default function DashboardPage() {
           onAddWeek={handleAddWeek}
           onUpdateWeekStatus={handleUpdateWeekStatus}
           onDeleteWeek={handleDeleteWeek}
+        />
+
+        {/* FITUR EKSPOR AUTOMATIS: Download Resume (.txt) Berdasarkan Filter Database */}
+        <DownloadResumeSection
+          checklists={checklists}
+          reports={reports}
         />
 
         {/* SECTION 5: Audit Report Builder (with 3 Required Columns) */}

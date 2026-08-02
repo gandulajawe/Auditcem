@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus, Search, Filter, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, Download, UserCheck, Calendar, Sparkles } from "lucide-react";
+import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
+import { formatIndonesianDate } from "@/lib/dateUtils";
 
 export interface AuditReportItem {
   id: number;
@@ -238,6 +239,7 @@ export function AuditReportBuilder({
             const isExpanded = expandedReportId === report.id;
             const statusInfo = getStatusBadge(report.status);
             const StatusIcon = statusInfo.icon;
+            const indonesianDate = formatIndonesianDate(report.auditDate);
 
             return (
               <div
@@ -288,13 +290,14 @@ export function AuditReportBuilder({
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-gray-400 font-medium">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-[#A569BD]" /> {report.auditDate}
+                    {/* Display Tanggal Audit in Indonesian format */}
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600 font-bold bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">
+                      <span className="flex items-center gap-1 text-[#6A0DAD]">
+                        <Calendar className="w-3.5 h-3.5 text-[#A569BD]" /> Tanggal Audit: {indonesianDate}
                       </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <UserCheck className="w-3 h-3 text-[#A569BD]" /> {report.auditorName}
+                      <span className="text-gray-300">•</span>
+                      <span className="flex items-center gap-1 text-gray-500">
+                        <UserCheck className="w-3.5 h-3.5 text-[#A569BD]" /> {report.auditorName}
                       </span>
                     </div>
                   </div>
@@ -303,6 +306,15 @@ export function AuditReportBuilder({
                 {/* Expanded 3 REQUIRED COLUMNS View */}
                 {isExpanded && (
                   <div className="p-5 bg-[#FAF7FB] border-t border-gray-100 space-y-4 animate-fadeIn">
+                    <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200">
+                      <span className="text-xs font-bold text-[#6A0DAD] flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-[#A569BD]" /> Tanggal Audit On-Site: <strong>{indonesianDate}</strong>
+                      </span>
+                      <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
+                        <UserCheck className="w-4 h-4 text-[#A569BD]" /> Auditor CEM: <strong>{report.auditorName}</strong>
+                      </span>
+                    </div>
+
                     <div className="space-y-1">
                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
                         Deskripsi Temuan Audit
