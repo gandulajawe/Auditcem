@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldAlert, LogOut, CheckCircle2, Factory, Sparkles, Award } from "lucide-react";
+import { ShieldAlert, LogOut, CheckCircle2, Factory, Award } from "lucide-react";
 
 interface HeaderHeroProps {
   totalChecklists: number;
@@ -23,11 +23,11 @@ export function HeaderHero({ totalChecklists, completedChecklists, onLogout }: H
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md text-white text-xs font-bold rounded-full border border-white/30 shadow-sm">
               <Factory className="w-3.5 h-3.5 text-[#F7C6D9]" />
-              CEM Footwear Manufacturing Plant
+              Semangat Dul
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#F2A7C6] text-[#6A0DAD] text-xs font-extrabold rounded-full shadow-sm">
               <Award className="w-3.5 h-3.5 text-[#6A0DAD]" />
-              Certified Engineering Manager
+              Gagal, coba lagi
             </span>
           </div>
 
@@ -45,14 +45,14 @@ export function HeaderHero({ totalChecklists, completedChecklists, onLogout }: H
         <div className="space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
-              The Audit Crucible
+              Dashboard audit Gandul
             </h1>
             <span className="px-3.5 py-1 bg-[#F7C6D9] text-[#6A0DAD] font-extrabold text-sm md:text-base rounded-2xl shadow-md border border-white/40">
               Months 4-6
             </span>
           </div>
           <p className="text-purple-100 text-sm md:text-base max-w-2xl font-medium leading-relaxed">
-            Program evaluasi intensif eksekusi langsung di lapangan pabrik sepatu yang dinilai secara riil oleh auditor ahli CEM.
+            Buktikan di program ini kamu lebih bisa berkembang
           </p>
         </div>
 

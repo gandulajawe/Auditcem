@@ -1,5 +1,11 @@
 import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const auditChecklists = pgTable("audit_checklists", {
   id: serial("id").primaryKey(),
   month: text("month").notNull(), // 'Agustus', 'September', 'Oktober'

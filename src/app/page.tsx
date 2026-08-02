@@ -339,7 +339,7 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-[#FAF7FB] flex flex-col justify-center items-center p-6 space-y-4">
         <div className="w-12 h-12 border-4 border-[#6A0DAD] border-t-transparent rounded-full animate-spin" />
         <p className="text-sm font-extrabold text-[#6A0DAD] tracking-wide animate-pulse">
-          Memuat Dashboard The Audit Crucible...
+          Memuat Dashboard...
         </p>
       </div>
     );
@@ -426,7 +426,7 @@ export default function DashboardPage() {
             The Audit Crucible — Months 4-6 Certified Engineering Manager (CEM) Program
           </p>
           <p className="text-[11px] text-gray-400">
-            Aplikasi Tracker Audit Pabrik Sepatu Terintegrasi • Sesi Aman httpOnly • Drizzle PostgreSQL Persistent DB
+            Aplikasi audit milik si Gandul
           </p>
         </footer>
       </div>
