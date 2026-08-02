@@ -1,0 +1,11 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/checklists/route": "/api/checklists",
+  "/api/health/route": "/api/health",
+  "/api/login/route": "/api/login",
+  "/api/reports/route": "/api/reports",
+  "/api/weekly/route": "/api/weekly",
+  "/login/page": "/login",
+  "/page": "/"
+}

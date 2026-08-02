@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-crucible-purple: #6A0DAD;
+  --color-crucible-purple-hover: #580B90;
+  --color-crucible-purple-light: #A569BD;
+  --color-crucible-purple-soft: #F3EAF8;
+  --color-crucible-pink-pastel: #F7C6D9;
+  --color-crucible-pink-medium: #F2A7C6;
+  --color-crucible-pink-accent: #E082A8;
+  --color-crucible-bg: #FAFAFD;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-crucible-bg);
+    color: #1F2937;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #A569BD;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6A0DAD;
+}
