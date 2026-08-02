@@ -25,6 +25,7 @@ interface WeeklyCadenceSectionProps {
   cadences: WeeklyCadenceItem[];
   onAddWeek: (weekData: Partial<WeeklyCadenceItem>) => Promise<void>;
   onUpdateWeekStatus: (id: number, dayKey: string, nextStatus: string) => Promise<void>;
+  onUpdateWeekDayTask: (id: number, dayTaskKey: string, taskValue: string, dayStatusKey: string, statusValue: string) => Promise<void>;
   onDeleteWeek: (id: number) => Promise<void>;
 }
 
@@ -32,11 +33,22 @@ export function WeeklyCadenceSection({
   cadences,
   onAddWeek,
   onUpdateWeekStatus,
+  onUpdateWeekDayTask,
   onDeleteWeek,
 }: WeeklyCadenceSectionProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedWeekTab, setSelectedWeekTab] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit Day Modal State
+  const [editingDay, setEditingDay] = useState<{
+    cadenceId: number;
+    dayName: string;
+    taskKey: string;
+    statusKey: string;
+    taskValue: string;
+    statusValue: string;
+  } | null>(null);
 
   // New week form state
   const nextWeekNum = cadences.length > 0 ? Math.max(...cadences.map((c) => c.weekNumber)) + 1 : 1;
@@ -96,6 +108,25 @@ export function WeeklyCadenceSection({
     };
     const next = statusMap[currentStatus] || "pending";
     await onUpdateWeekStatus(cadenceId, dayKey, next);
+  }
+
+  async function handleSaveDayEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingDay) return;
+
+    setIsSubmitting(true);
+    try {
+      await onUpdateWeekDayTask(
+        editingDay.cadenceId,
+        editingDay.taskKey,
+        editingDay.taskValue,
+        editingDay.statusKey,
+        editingDay.statusValue
+      );
+      setEditingDay(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleCreateWeek(e: React.FormEvent) {
@@ -198,7 +229,7 @@ export function WeeklyCadenceSection({
               </span>
               <button
                 onClick={() => onDeleteWeek(activeCadence.id)}
-                className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                 title="Hapus Minggu Ini"
               >
                 <Trash2 className="w-4 h-4" />
@@ -244,13 +275,30 @@ export function WeeklyCadenceSection({
                     <button
                       onClick={() => handleCycleStatus(activeCadence.id, day.statusKey, currentStatus)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer ${badge.bg}`}
-                      title="Klik untuk ubah status hari ini"
+                      title="Klik untuk ubah status cepat"
                     >
                       <BadgeIcon className="w-3 h-3" />
                       <span>{badge.label}</span>
                     </button>
 
-                    <span className="text-[10px] text-gray-400 font-medium">Klik ubah</span>
+                    {/* FIXED "KLIK UBAH" BUTTON */}
+                    <button
+                      onClick={() =>
+                        setEditingDay({
+                          cadenceId: activeCadence.id,
+                          dayName: day.name,
+                          taskKey: day.taskKey,
+                          statusKey: day.statusKey,
+                          taskValue: taskText,
+                          statusValue: currentStatus,
+                        })
+                      }
+                      className="text-[10px] text-[#6A0DAD] hover:text-[#580B90] font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
+                      title={`Edit tugas & status untuk hari ${day.name}`}
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Klik ubah</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -260,6 +308,70 @@ export function WeeklyCadenceSection({
       ) : (
         <div className="p-8 text-center bg-gray-50 rounded-2xl border border-dashed text-gray-400 text-xs">
           Belum ada data ritme mingguan. Silakan klik tombol &quot;Tambah Minggu Baru&quot;.
+        </div>
+      )}
+
+      {/* EDIT DAY MODAL */}
+      {editingDay && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-[#F7C6D9] shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3 border-gray-100">
+              <h3 className="text-lg font-bold text-[#6A0DAD] flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#A569BD]" />
+                Edit Aktivitas Hari {editingDay.dayName}
+              </h3>
+              <button
+                onClick={() => setEditingDay(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDayEdit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Judul Aktivitas / Task Hari {editingDay.dayName}</label>
+                <input
+                  type="text"
+                  value={editingDay.taskValue}
+                  onChange={(e) => setEditingDay({ ...editingDay, taskValue: e.target.value })}
+                  placeholder="Contoh: MQAA: Audit Presisi Die Cutting..."
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Status Hari {editingDay.dayName}</label>
+                <select
+                  value={editingDay.statusValue}
+                  onChange={(e) => setEditingDay({ ...editingDay, statusValue: e.target.value })}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                >
+                  <option value="pending">Pending (Belum Diaksekusi)</option>
+                  <option value="in_progress">Berjalan (In Progress)</option>
+                  <option value="completed">Selesai (Completed)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingDay(null)}
+                  className="flex-1 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-[#6A0DAD] hover:bg-[#580B90] rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -274,7 +386,7 @@ export function WeeklyCadenceSection({
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>

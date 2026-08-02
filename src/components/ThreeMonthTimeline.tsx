@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Circle, ArrowRight, Plus, Trash2, Calendar, Sparkles, Filter } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, Plus, Trash2, Calendar, Sparkles, Edit3 } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
 
@@ -21,6 +21,7 @@ interface ThreeMonthTimelineProps {
   selectedAreaFilter: AreaType;
   onToggleChecklist: (id: number, currentStatus: boolean) => Promise<void>;
   onAddChecklist: (item: { month: string; domain: string; title: string; description: string; area: string }) => Promise<void>;
+  onEditChecklist: (id: number, updatedItem: { month: string; domain: string; title: string; description: string; area: string }) => Promise<void>;
   onDeleteChecklist: (id: number) => Promise<void>;
 }
 
@@ -29,13 +30,26 @@ export function ThreeMonthTimeline({
   selectedAreaFilter,
   onToggleChecklist,
   onAddChecklist,
+  onEditChecklist,
   onDeleteChecklist,
 }: ThreeMonthTimelineProps) {
   const [activeModalMonth, setActiveModalMonth] = useState<string | null>(null);
+  
+  // Edit item modal state
+  const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
+  
   const [newTitle, setNewTitle] = useState("");
   const [newDomain, setNewDomain] = useState("MQAA");
   const [newArea, setNewArea] = useState("All");
   const [newDesc, setNewDesc] = useState("");
+  
+  // Edit form state
+  const [editTitle, setEditTitle] = useState("");
+  const [editDomain, setEditDomain] = useState("MQAA");
+  const [editArea, setEditArea] = useState("All");
+  const [editMonth, setEditMonth] = useState("Agustus");
+  const [editDesc, setEditDesc] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
@@ -45,7 +59,6 @@ export function ThreeMonthTimeline({
       monthLabel: "Bulan 4 (Fase Awal)",
       scopeTitle: "3 Checklist Utama",
       domains: ["MQAA", "6S", "Visual Management"],
-      color: "from-[#6A0DAD]/10 to-[#A569BD]/10",
       borderColor: "border-[#6A0DAD]",
       badgeBg: "bg-[#6A0DAD] text-white",
     },
@@ -54,7 +67,6 @@ export function ThreeMonthTimeline({
       monthLabel: "Bulan 5 (Fase Penyelarasan)",
       scopeTitle: "Custom / Manual Scope",
       domains: ["MQAA", "6S", "Visual Management"],
-      color: "from-[#A569BD]/10 to-[#F7C6D9]/20",
       borderColor: "border-[#A569BD]",
       badgeBg: "bg-[#A569BD] text-white",
     },
@@ -63,7 +75,6 @@ export function ThreeMonthTimeline({
       monthLabel: "Bulan 6 (Full Scope Evaluation)",
       scopeTitle: "5 Domain Full Scope Audit",
       domains: ["MQAA", "6S", "Visual Management", "HSE", "PS"],
-      color: "from-[#F7C6D9]/30 to-[#F2A7C6]/30",
       borderColor: "border-[#E082A8]",
       badgeBg: "bg-[#E082A8] text-white",
     },
@@ -99,6 +110,34 @@ export function ThreeMonthTimeline({
     }
   }
 
+  async function handleSaveEditChecklist(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingItem || !editTitle.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      await onEditChecklist(editingItem.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        domain: editDomain,
+        area: editArea,
+        month: editMonth,
+      });
+      setEditingItem(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function openEditModal(item: ChecklistItem) {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditDesc(item.description || "");
+    setEditDomain(item.domain);
+    setEditArea(item.area || "All");
+    setEditMonth(item.month);
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,7 +151,7 @@ export function ThreeMonthTimeline({
           </h2>
         </div>
         <p className="text-xs text-gray-500 max-w-sm">
-          Centang item checklist setelah berhasil dieksekusi di lapangan. Data akan tersimpan secara otomatis.
+          Semua item checklist dapat dicentang, diedit, atau dihapus secara bebas. Data akan tersimpan persisten ke database.
         </p>
       </div>
 
@@ -188,7 +227,7 @@ export function ThreeMonthTimeline({
                       </p>
                       <button
                         onClick={() => setActiveModalMonth(m.name)}
-                        className="text-xs font-bold text-[#6A0DAD] hover:underline inline-flex items-center gap-1 mt-1"
+                        className="text-xs font-bold text-[#6A0DAD] hover:underline inline-flex items-center gap-1 mt-1 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" /> Tambah Checklist {m.name}
                       </button>
@@ -239,16 +278,22 @@ export function ThreeMonthTimeline({
                               </div>
                             </button>
 
+                            {/* EDIT & DELETE BUTTONS FOR ALL ITEMS (INCLUDING SEED DATA) */}
                             <div className="flex items-center gap-1 shrink-0">
-                              {item.isCustom && (
-                                <button
-                                  onClick={() => onDeleteChecklist(item.id)}
-                                  className="p-1 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
-                                  title="Hapus checklist custom"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-1 text-gray-400 hover:text-[#6A0DAD] rounded-lg hover:bg-purple-50 transition-colors opacity-80 group-hover:opacity-100 cursor-pointer"
+                                title="Edit checklist"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => onDeleteChecklist(item.id)}
+                                className="p-1 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors opacity-80 group-hover:opacity-100 cursor-pointer"
+                                title="Hapus checklist"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
 
@@ -283,6 +328,107 @@ export function ThreeMonthTimeline({
         })}
       </div>
 
+      {/* EDIT CHECKLIST MODAL */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-[#F7C6D9] shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3 border-gray-100">
+              <h3 className="text-lg font-bold text-[#6A0DAD] flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#A569BD]" />
+                Edit Item Checklist
+              </h3>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditChecklist} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Target Bulan Timeline</label>
+                <select
+                  value={editMonth}
+                  onChange={(e) => setEditMonth(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                >
+                  <option value="Agustus">Agustus (Bulan 4)</option>
+                  <option value="September">September (Bulan 5)</option>
+                  <option value="Oktober">Oktober (Bulan 6)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Domain Audit</label>
+                <select
+                  value={editDomain}
+                  onChange={(e) => setEditDomain(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                >
+                  <option value="MQAA">MQAA (Manufacturing Quality Assurance Audit)</option>
+                  <option value="6S">6S (Sort, Set, Shine, Standardize, Sustain, Safety)</option>
+                  <option value="Visual Management">Visual Management</option>
+                  <option value="HSE">HSE (Health, Safety & Environment)</option>
+                  <option value="PS">PS (Process Standardization)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Target Area Audit</label>
+                <select
+                  value={editArea}
+                  onChange={(e) => setEditArea(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                >
+                  <option value="All">Semua Area (All)</option>
+                  <option value="Cutting">Cutting Area</option>
+                  <option value="Prep">Prep Area</option>
+                  <option value="CSC">CSC Area</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Judul Item Checklist</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Deskripsi / Detail Eksekusi</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD] h-20 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="flex-1 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-[#6A0DAD] hover:bg-[#580B90] rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Checklist Modal */}
       {activeModalMonth && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
@@ -294,7 +440,7 @@ export function ThreeMonthTimeline({
               </h3>
               <button
                 onClick={() => setActiveModalMonth(null)}
-                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>

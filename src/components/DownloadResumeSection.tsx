@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText, Filter, CheckCircle2, AlertCircle, FileCheck, Sparkles } from "lucide-react";
+import { Download, Filter, CheckCircle2, FileCheck, Calendar, Sparkles } from "lucide-react";
 import { ChecklistItem } from "./ThreeMonthTimeline";
 import { AuditReportItem } from "./AuditReportBuilder";
 import { formatIndonesianDate, matchesMonthTimeline } from "@/lib/dateUtils";
+import { generateAuditResumePDF } from "@/lib/pdfGenerator";
 
 interface DownloadResumeSectionProps {
   checklists: ChecklistItem[];
@@ -12,16 +13,32 @@ interface DownloadResumeSectionProps {
 }
 
 export function DownloadResumeSection({ checklists, reports }: DownloadResumeSectionProps) {
-  // Filter States (Dropdowns ONLY - NO FORM INPUT)
+  // Filter States (Dropdowns & Date Selector ONLY - NO DATA ENTRY)
   const [selectedTimeline, setSelectedTimeline] = useState<string>("All");
+  const [selectedSpecificDate, setSelectedSpecificDate] = useState<string>("");
   const [selectedDomain, setSelectedDomain] = useState<string>("All");
   const [selectedArea, setSelectedArea] = useState<string>("All");
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Filter checklists
   const filteredChecklists = checklists.filter((item) => {
-    // Timeline filter
-    if (selectedTimeline !== "All" && item.month !== selectedTimeline) return false;
+    // If specific date is selected, check if item.month matches month of specific date or selectedTimeline
+    if (selectedSpecificDate) {
+      const monthMap: Record<number, string> = {
+        8: "Agustus",
+        9: "September",
+        10: "Oktober",
+      };
+      const parts = selectedSpecificDate.split("-");
+      if (parts.length === 3) {
+        const mNum = parseInt(parts[1], 10);
+        const expectedMonth = monthMap[mNum];
+        if (expectedMonth && item.month !== expectedMonth) return false;
+      }
+    } else if (selectedTimeline !== "All" && item.month !== selectedTimeline) {
+      return false;
+    }
+
     // Domain filter
     if (selectedDomain !== "All" && item.domain !== selectedDomain) return false;
     // Area filter
@@ -31,8 +48,14 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
 
   // Filter audit reports
   const filteredReports = reports.filter((report) => {
-    // Timeline filter (by auditDate month)
-    if (selectedTimeline !== "All" && !matchesMonthTimeline(report.auditDate, selectedTimeline)) return false;
+    // Specific Date filter takes priority if filled
+    if (selectedSpecificDate) {
+      const repDateClean = report.auditDate ? report.auditDate.split("T")[0] : "";
+      if (repDateClean !== selectedSpecificDate) return false;
+    } else if (selectedTimeline !== "All" && !matchesMonthTimeline(report.auditDate, selectedTimeline)) {
+      return false;
+    }
+
     // Domain filter
     if (selectedDomain !== "All" && report.domain !== selectedDomain) return false;
     // Area filter
@@ -43,102 +66,34 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
   const completedChecklistsCount = filteredChecklists.filter((c) => c.completed).length;
   const checklistPercent = filteredChecklists.length > 0 ? Math.round((completedChecklistsCount / filteredChecklists.length) * 100) : 0;
 
-  function handleDownloadResume() {
+  function handleDownloadPDF() {
     setIsDownloading(true);
 
     try {
-      const todayStr = formatIndonesianDate(new Date().toISOString().split("T")[0]);
-      
-      let txt = `================================================================================\n`;
-      txt += `                     THE AUDIT CRUCIBLE — RESUME AUDIT LAPANGAN\n`;
-      txt += `                    CERTIFIED ENGINEERING MANAGER (CEM) PROGRAM\n`;
-      txt += `================================================================================\n\n`;
-      txt += `INFORMASI RESUME:\n`;
-      txt += `  • Tanggal Resume Dibuat : ${todayStr}\n`;
-      txt += `  • Filter Timeline       : ${selectedTimeline === "All" ? "Semua Bulan (Agustus - Oktober)" : selectedTimeline}\n`;
-      txt += `  • Filter Domain Audit   : ${selectedDomain === "All" ? "Semua Domain (MQAA, 6S, VM, HSE, PS)" : selectedDomain}\n`;
-      txt += `  • Filter Area Audit     : ${selectedArea === "All" ? "Semua Area (Cutting, Prep, CSC)" : selectedArea}\n`;
-      txt += `--------------------------------------------------------------------------------\n\n`;
+      const doc = generateAuditResumePDF({
+        timelineFilter: selectedTimeline,
+        specificDateFilter: selectedSpecificDate,
+        domainFilter: selectedDomain,
+        areaFilter: selectedArea,
+        checklists: filteredChecklists,
+        reports: filteredReports,
+      });
 
-      // PART 1: CHECKLISTS SUMMARY
-      txt += `[1] RINGKASAN CHECKLIST AUDIT (TOTAL: ${filteredChecklists.length} Item | ${completedChecklistsCount} Selesai - ${checklistPercent}%)\n`;
-      txt += `--------------------------------------------------------------------------------\n`;
-
-      if (filteredChecklists.length === 0) {
-        txt += `Tidak ada item checklist yang cocok dengan filter aktif.\n\n`;
-      } else {
-        filteredChecklists.forEach((c, idx) => {
-          const statusStr = c.completed ? "[✓ SELESAI]" : "[  BELUM  ]";
-          txt += `${idx + 1}. ${statusStr} ${c.title}\n`;
-          txt += `   - Bulan Target : ${c.month}\n`;
-          txt += `   - Domain       : ${c.domain}\n`;
-          txt += `   - Target Area  : ${c.area || "All"}\n`;
-          if (c.description) {
-            txt += `   - Deskripsi    : ${c.description}\n`;
-          }
-          txt += `\n`;
-        });
-      }
-
-      txt += `--------------------------------------------------------------------------------\n\n`;
-
-      // PART 2: AUDIT REPORTS LIST
-      txt += `[2] DAFTAR LAPORAN AUDIT LENGKAP (TOTAL: ${filteredReports.length} Laporan)\n`;
-      txt += `--------------------------------------------------------------------------------\n`;
-
-      if (filteredReports.length === 0) {
-        txt += `Tidak ada laporan audit yang cocok dengan filter aktif.\n\n`;
-      } else {
-        filteredReports.forEach((r, idx) => {
-          const indonesianDate = formatIndonesianDate(r.auditDate);
-          txt += `LAPORAN AUDIT #${idx + 1}: ${r.title.toUpperCase()}\n`;
-          txt += `  • Tanggal Audit : ${indonesianDate}\n`;
-          txt += `  • Area Audit    : ${r.area}\n`;
-          txt += `  • Domain Audit  : ${r.domain}\n`;
-          txt += `  • Severity      : ${r.severity}\n`;
-          txt += `  • Status        : ${r.status}\n`;
-          txt += `  • Auditor       : ${r.auditorName}\n\n`;
-
-          txt += `  [DESKRIPSI TEMUAN AUDIT LAPANGAN]:\n`;
-          txt += `  ${r.findingDescription.replace(/\n/g, "\n  ")}\n\n`;
-
-          txt += `  [ANALISIS 3 KOLOM WAJIB]:\n`;
-          txt += `  1. ROOT CAUSE ANALYSIS (AKAR MASALAH):\n`;
-          txt += `     ${r.rootCause.replace(/\n/g, "\n     ")}\n\n`;
-
-          txt += `  2. ACTION PLAN REMEDIASI (RENCANA PERBAIKAN):\n`;
-          txt += `     ${r.actionPlan.replace(/\n/g, "\n     ")}\n\n`;
-
-          txt += `  3. KEY LESSON LEARNED (PEMBELAJARAN UTAMA):\n`;
-          txt += `     ${r.lessonLearned.replace(/\n/g, "\n     ")}\n\n`;
-
-          txt += `--------------------------------------------------------------------------------\n`;
-        });
-      }
-
-      txt += `\n================================================================================\n`;
-      txt += ` Akhir Laporan Resume Audit Crucible — Dihasilkan otomatis oleh Sistem Dashboard CEM\n`;
-      txt += `================================================================================\n`;
-
-      // Generate filename with active filters
-      const cleanTimeline = selectedTimeline.replace(/[^a-zA-Z0-9]/g, "");
+      // Filename construction
       const cleanDomain = selectedDomain.replace(/[^a-zA-Z0-9]/g, "");
       const cleanArea = selectedArea.replace(/[^a-zA-Z0-9]/g, "");
 
-      const filename = `Audit-Resume-${cleanTimeline}-${cleanDomain}-${cleanArea}.txt`;
+      let filename = "";
+      if (selectedSpecificDate) {
+        filename = `Audit-Resume-${selectedSpecificDate}-${cleanDomain}-${cleanArea}.pdf`;
+      } else {
+        const cleanTimeline = selectedTimeline.replace(/[^a-zA-Z0-9]/g, "");
+        filename = `Audit-Resume-${cleanTimeline}-${cleanDomain}-${cleanArea}.pdf`;
+      }
 
-      // Trigger browser download
-      const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      doc.save(filename);
     } catch (err) {
-      console.error("Failed to generate resume:", err);
+      console.error("Failed to generate PDF resume:", err);
     } finally {
       setIsDownloading(false);
     }
@@ -150,56 +105,93 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className="text-xs font-bold text-[#A569BD] tracking-wider uppercase">
-            Fitur Ekspor Otomatis
+            Fitur Ekspor PDF Otomatis
           </span>
           <h2 className="text-2xl font-black text-[#6A0DAD] flex items-center gap-2">
             <Download className="w-6 h-6 text-[#A569BD]" />
-            Download Resume Audit (.txt)
+            Download Resume Audit (.pdf)
           </h2>
           <p className="text-xs text-gray-500 mt-1 max-w-xl">
-            Pilih filter kriteria di bawah ini. Sistem secara otomatis akan merangkum seluruh checklist dan laporan audit yang tersimpan di database tanpa perlu menginput ulang data.
+            Pilih kriteria filter di bawah. Sistem otomatis merangkum data checklist dan laporan audit murni dari database dalam format PDF resmi tanpa perlu memasukkan data ulang.
           </p>
         </div>
 
         <button
-          onClick={handleDownloadResume}
+          onClick={handleDownloadPDF}
           disabled={isDownloading}
           className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] hover:to-[#9455AC] text-white font-extrabold text-xs rounded-2xl shadow-lg shadow-[#6A0DAD]/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
         >
           <Download className="w-4 h-4 text-[#F7C6D9]" />
-          <span>{isDownloading ? "Menyiapkan Resume..." : "Download Resume (.txt)"}</span>
+          <span>{isDownloading ? "Menyiapkan PDF..." : "Download Resume PDF (.pdf)"}</span>
         </button>
       </div>
 
-      {/* FILTER DROPDOWNS ONLY - NO FORM INPUT */}
+      {/* FILTER DROPDOWNS & DATE SELECTOR ONLY - NO FORM INPUT */}
       <div className="bg-[#FAF7FB] p-5 rounded-2xl border border-[#F2A7C6]/50 space-y-4">
         <div className="flex items-center gap-2 text-xs font-bold text-[#6A0DAD]">
           <Filter className="w-4 h-4 text-[#A569BD]" />
           <span>PILIH FILTER RINGKASAN DATA DATABASE</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Dropdown 1: Timeline Executions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Dropdown 1: Timeline Executions (Month) */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block">
-              1. Timeline Executions
+              1. Timeline (Bulan)
             </label>
             <select
               value={selectedTimeline}
-              onChange={(e) => setSelectedTimeline(e.target.value)}
+              onChange={(e) => {
+                setSelectedTimeline(e.target.value);
+                // Clear specific date if timeline changes
+                setSelectedSpecificDate("");
+              }}
               className="w-full p-2.5 bg-white border border-gray-200 focus:border-[#6A0DAD] rounded-xl text-xs font-bold outline-none cursor-pointer shadow-xs"
             >
-              <option value="All">All (Agustus, September, Oktober)</option>
+              <option value="All">All (Agustus - Oktober)</option>
               <option value="Agustus">Agustus (Bulan 4)</option>
               <option value="September">September (Bulan 5)</option>
               <option value="Oktober">Oktober (Bulan 6)</option>
             </select>
           </div>
 
-          {/* Dropdown 2: Domain Audit */}
+          {/* Filter 2: Specific Date Selector (Harian) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-700 block flex items-center justify-between">
+              <span>2. Tanggal Spesifik (Harian)</span>
+              {selectedSpecificDate && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpecificDate("")}
+                  className="text-[10px] text-[#6A0DAD] font-extrabold hover:underline"
+                >
+                  Reset Tanggal
+                </button>
+              )}
+            </label>
+            <div className="relative">
+              <input
+                type="date"
+                value={selectedSpecificDate}
+                onChange={(e) => setSelectedSpecificDate(e.target.value)}
+                className="w-full p-2.5 bg-white border border-gray-200 focus:border-[#6A0DAD] rounded-xl text-xs font-bold outline-none cursor-pointer shadow-xs"
+              />
+            </div>
+            {selectedSpecificDate ? (
+              <span className="text-[10px] text-[#6A0DAD] font-extrabold block">
+                ✓ Filter Aktif: {formatIndonesianDate(selectedSpecificDate)}
+              </span>
+            ) : (
+              <span className="text-[10px] text-gray-400 font-medium block">
+                Default: Semua tanggal di {selectedTimeline === "All" ? "Semua Bulan" : selectedTimeline}
+              </span>
+            )}
+          </div>
+
+          {/* Dropdown 3: Domain Audit */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block">
-              2. Domain Audit
+              3. Domain Audit
             </label>
             <select
               value={selectedDomain}
@@ -215,10 +207,10 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
             </select>
           </div>
 
-          {/* Dropdown 3: Area */}
+          {/* Dropdown 4: Area */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block">
-              3. Area Audit
+              4. Area Audit
             </label>
             <select
               value={selectedArea}
@@ -248,7 +240,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
           </div>
 
           <span className="text-[11px] text-gray-400 font-bold">
-            Target file: Audit-Resume-{selectedTimeline.replace(/[^a-zA-Z0-9]/g, "")}-{selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-{selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.txt
+            Target PDF: {selectedSpecificDate ? `Audit-Resume-${selectedSpecificDate}-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf` : `Audit-Resume-${selectedTimeline.replace(/[^a-zA-Z0-9]/g, "")}-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf`}
           </span>
         </div>
       </div>

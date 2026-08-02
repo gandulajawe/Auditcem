@@ -132,6 +132,30 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleEditChecklist(
+    id: number,
+    updatedItem: { month: string; domain: string; title: string; description: string; area: string }
+  ) {
+    try {
+      const res = await fetch("/api/checklists", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...updatedItem }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChecklists((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, ...data.data } : c))
+        );
+        showToast("Item checklist berhasil diperbarui.");
+      } else {
+        showToast(data.error || "Gagal memperbarui checklist.");
+      }
+    } catch {
+      showToast("Terjadi kesalahan koneksi.");
+    }
+  }
+
   async function handleDeleteChecklist(id: number) {
     try {
       const res = await fetch(`/api/checklists?id=${id}`, { method: "DELETE" });
@@ -185,6 +209,43 @@ export default function DashboardPage() {
         showToast("Gagal memperbarui status hari.");
       } else {
         showToast("Status aktivitas harian diperbarui.");
+      }
+    } catch {
+      loadData(true);
+      showToast("Terjadi kesalahan koneksi.");
+    }
+  }
+
+  async function handleUpdateWeekDayTask(
+    id: number,
+    dayTaskKey: string,
+    taskValue: string,
+    dayStatusKey: string,
+    statusValue: string
+  ) {
+    // Optimistic update
+    setCadences((prev) =>
+      prev.map((cad) =>
+        cad.id === id ? { ...cad, [dayTaskKey]: taskValue, [dayStatusKey]: statusValue } : cad
+      )
+    );
+
+    try {
+      const res = await fetch("/api/weekly", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          [dayTaskKey]: taskValue,
+          [dayStatusKey]: statusValue,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        loadData(true);
+        showToast("Gagal memperbarui aktivitas harian.");
+      } else {
+        showToast("Aktivitas harian berhasil diperbarui!");
       }
     } catch {
       loadData(true);
@@ -331,6 +392,7 @@ export default function DashboardPage() {
           selectedAreaFilter={selectedAreaFilter}
           onToggleChecklist={handleToggleChecklist}
           onAddChecklist={handleAddChecklist}
+          onEditChecklist={handleEditChecklist}
           onDeleteChecklist={handleDeleteChecklist}
         />
 
@@ -339,10 +401,11 @@ export default function DashboardPage() {
           cadences={cadences}
           onAddWeek={handleAddWeek}
           onUpdateWeekStatus={handleUpdateWeekStatus}
+          onUpdateWeekDayTask={handleUpdateWeekDayTask}
           onDeleteWeek={handleDeleteWeek}
         />
 
-        {/* FITUR EKSPOR AUTOMATIS: Download Resume (.txt) Berdasarkan Filter Database */}
+        {/* FITUR EKSPOR OTOMATIS PDF: Download Resume (.pdf) Berdasarkan Filter Database */}
         <DownloadResumeSection
           checklists={checklists}
           reports={reports}
