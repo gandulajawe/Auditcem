@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles } from "lucide-react";
+import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2 } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
 import { formatIndonesianDate } from "@/lib/dateUtils";
+import { generateSingleReportPDF } from "@/lib/pdfGenerator";
 
 export interface AuditReportItem {
   id: number;
@@ -25,7 +26,7 @@ export interface AuditReportItem {
 interface AuditReportBuilderProps {
   reports: AuditReportItem[];
   selectedAreaFilter: AreaType;
-  onAddReport: (reportData: Omit<AuditReportItem, "id">) => Promise<void>;
+  onAddReport: (reportData: Omit<AuditReportItem, "id">) => Promise<AuditReportItem | void>;
   onUpdateReportStatus: (id: number, newStatus: string) => Promise<void>;
   onDeleteReport: (id: number) => Promise<void>;
 }
@@ -43,6 +44,9 @@ export function AuditReportBuilder({
   const [selectedDomainFilter, setSelectedDomainFilter] = useState("All");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("All");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Success Modal State for single report PDF download
+  const [savedReportSuccess, setSavedReportSuccess] = useState<AuditReportItem | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -100,8 +104,20 @@ export function AuditReportBuilder({
 
     setIsSubmitting(true);
     try {
-      await onAddReport({ ...formData });
+      const createdReport = await onAddReport({ ...formData });
       setShowAddModal(false);
+
+      // If created report returned, show success modal with PDF download option
+      if (createdReport) {
+        setSavedReportSuccess(createdReport);
+      } else {
+        // Fallback construct mock object for PDF download
+        setSavedReportSuccess({
+          id: Date.now(),
+          ...formData,
+        });
+      }
+
       // Reset form
       setFormData({
         title: "",
@@ -120,6 +136,17 @@ export function AuditReportBuilder({
       setFormError(err instanceof Error ? err.message : "Gagal menyimpan laporan.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function handleDownloadSinglePDF(report: AuditReportItem) {
+    try {
+      const doc = generateSingleReportPDF(report);
+      const cleanTitle = report.title.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
+      const filename = `Laporan-Audit-${cleanTitle}-${report.auditDate}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error("Failed to generate single report PDF:", err);
     }
   }
 
@@ -279,6 +306,19 @@ export function AuditReportBuilder({
                         <span>{statusInfo.label}</span>
                       </span>
 
+                      {/* Download Single Report PDF Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadSinglePDF(report);
+                        }}
+                        className="px-2 py-1 bg-[#6A0DAD]/10 hover:bg-[#6A0DAD] text-[#6A0DAD] hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        title="Download PDF Laporan Ini"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>PDF</span>
+                      </button>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -306,13 +346,22 @@ export function AuditReportBuilder({
                 {/* Expanded 3 REQUIRED COLUMNS View */}
                 {isExpanded && (
                   <div className="p-5 bg-[#FAF7FB] border-t border-gray-100 space-y-4 animate-fadeIn">
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200">
+                    <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-xl border border-gray-200 gap-2">
                       <span className="text-xs font-bold text-[#6A0DAD] flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-[#A569BD]" /> Tanggal Audit On-Site: <strong>{indonesianDate}</strong>
                       </span>
-                      <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
-                        <UserCheck className="w-4 h-4 text-[#A569BD]" /> Auditor CEM: <strong>{report.auditorName}</strong>
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4 text-[#A569BD]" /> Auditor CEM: <strong>{report.auditorName}</strong>
+                        </span>
+                        <button
+                          onClick={() => handleDownloadSinglePDF(report)}
+                          className="px-3 py-1 bg-[#6A0DAD] hover:bg-[#580B90] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5 text-[#F7C6D9]" />
+                          <span>Download PDF Laporan Ini</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-1">
@@ -411,6 +460,50 @@ export function AuditReportBuilder({
           })
         )}
       </div>
+
+      {/* SUCCESS CONFIRMATION MODAL WITH PDF DOWNLOAD BUTTON */}
+      {savedReportSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-[#F7C6D9] shadow-2xl text-center">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center shadow-inner">
+              <CheckCircle2 className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-[#6A0DAD]">
+                Laporan Audit Berhasil Disimpan!
+              </h3>
+              <p className="text-xs text-gray-600 mt-1 font-medium leading-relaxed">
+                Laporan &quot;<strong>{savedReportSuccess.title}</strong>&quot; telah tersimpan secara permanen di database.
+              </p>
+            </div>
+
+            <div className="bg-[#FAF7FB] p-3 rounded-2xl border border-purple-100 text-xs text-left space-y-1">
+              <p className="font-bold text-gray-800">Detail Ringkas Laporan:</p>
+              <p className="text-gray-600">• Area: {savedReportSuccess.area} | Domain: {savedReportSuccess.domain}</p>
+              <p className="text-gray-600">• Tanggal: {formatIndonesianDate(savedReportSuccess.auditDate)}</p>
+              <p className="text-gray-600">• Auditor: {savedReportSuccess.auditorName}</p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => handleDownloadSinglePDF(savedReportSuccess)}
+                className="w-full py-3 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-[#F7C6D9]" />
+                <span>Download PDF Laporan Ini</span>
+              </button>
+
+              <button
+                onClick={() => setSavedReportSuccess(null)}
+                className="w-full py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create New Report Modal */}
       {showFormModal && (

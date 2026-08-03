@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Circle, ArrowRight, Plus, Trash2, Calendar, Sparkles, Edit3 } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
+import { formatIndonesianDate } from "@/lib/dateUtils";
 
 export interface ChecklistItem {
   id: number;
@@ -12,6 +13,7 @@ export interface ChecklistItem {
   title: string;
   description?: string | null;
   area?: string | null;
+  auditDate?: string | null; // YYYY-MM-DD (optional specific date)
   completed: boolean;
   isCustom: boolean;
 }
@@ -20,8 +22,8 @@ interface ThreeMonthTimelineProps {
   checklists: ChecklistItem[];
   selectedAreaFilter: AreaType;
   onToggleChecklist: (id: number, currentStatus: boolean) => Promise<void>;
-  onAddChecklist: (item: { month: string; domain: string; title: string; description: string; area: string }) => Promise<void>;
-  onEditChecklist: (id: number, updatedItem: { month: string; domain: string; title: string; description: string; area: string }) => Promise<void>;
+  onAddChecklist: (item: { month: string; domain: string; title: string; description: string; area: string; auditDate?: string | null }) => Promise<void>;
+  onEditChecklist: (id: number, updatedItem: { month: string; domain: string; title: string; description: string; area: string; auditDate?: string | null }) => Promise<void>;
   onDeleteChecklist: (id: number) => Promise<void>;
 }
 
@@ -42,6 +44,7 @@ export function ThreeMonthTimeline({
   const [newDomain, setNewDomain] = useState("MQAA");
   const [newArea, setNewArea] = useState("All");
   const [newDesc, setNewDesc] = useState("");
+  const [newAuditDate, setNewAuditDate] = useState("");
   
   // Edit form state
   const [editTitle, setEditTitle] = useState("");
@@ -49,6 +52,7 @@ export function ThreeMonthTimeline({
   const [editArea, setEditArea] = useState("All");
   const [editMonth, setEditMonth] = useState("Agustus");
   const [editDesc, setEditDesc] = useState("");
+  const [editAuditDate, setEditAuditDate] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
@@ -101,9 +105,11 @@ export function ThreeMonthTimeline({
         title: newTitle.trim(),
         description: newDesc.trim(),
         area: newArea,
+        auditDate: newAuditDate || null,
       });
       setNewTitle("");
       setNewDesc("");
+      setNewAuditDate("");
       setActiveModalMonth(null);
     } finally {
       setIsSubmitting(false);
@@ -122,6 +128,7 @@ export function ThreeMonthTimeline({
         domain: editDomain,
         area: editArea,
         month: editMonth,
+        auditDate: editAuditDate || null,
       });
       setEditingItem(null);
     } finally {
@@ -136,6 +143,7 @@ export function ThreeMonthTimeline({
     setEditDomain(item.domain);
     setEditArea(item.area || "All");
     setEditMonth(item.month);
+    setEditAuditDate(item.auditDate || "");
   }
 
   return (
@@ -278,7 +286,7 @@ export function ThreeMonthTimeline({
                               </div>
                             </button>
 
-                            {/* EDIT & DELETE BUTTONS FOR ALL ITEMS (INCLUDING SEED DATA) */}
+                            {/* EDIT & DELETE BUTTONS */}
                             <div className="flex items-center gap-1 shrink-0">
                               <button
                                 onClick={() => openEditModal(item)}
@@ -297,11 +305,21 @@ export function ThreeMonthTimeline({
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-1 border-t border-gray-100/80 text-[10px]">
-                            <DomainBadge domain={item.domain} size="sm" />
-                            {item.area && item.area !== "All" && (
-                              <span className="px-2 py-0.5 bg-[#F7C6D9] text-[#6A0DAD] font-extrabold rounded-md">
-                                {item.area}
+                          <div className="flex flex-wrap items-center justify-between pt-1 border-t border-gray-100/80 text-[10px] gap-1">
+                            <div className="flex items-center gap-1">
+                              <DomainBadge domain={item.domain} size="sm" />
+                              {item.area && item.area !== "All" && (
+                                <span className="px-2 py-0.5 bg-[#F7C6D9] text-[#6A0DAD] font-extrabold rounded-md">
+                                  {item.area}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Display auditDate if present */}
+                            {item.auditDate && (
+                              <span className="flex items-center gap-1 text-[10px] text-purple-900 bg-purple-100/80 px-2 py-0.5 rounded-md font-bold">
+                                <Calendar className="w-3 h-3 text-[#6A0DAD]" />
+                                {formatIndonesianDate(item.auditDate)}
                               </span>
                             )}
                           </div>
@@ -316,6 +334,7 @@ export function ThreeMonthTimeline({
                   onClick={() => {
                     setActiveModalMonth(m.name);
                     setNewDomain(m.domains[0] || "MQAA");
+                    setNewAuditDate("");
                   }}
                   className="w-full py-2.5 px-3 bg-[#FAF7FB] hover:bg-[#F7C6D9]/40 border border-dashed border-[#A569BD]/50 text-[#6A0DAD] font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                 >
@@ -346,17 +365,29 @@ export function ThreeMonthTimeline({
             </div>
 
             <form onSubmit={handleSaveEditChecklist} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-700">Target Bulan Timeline</label>
-                <select
-                  value={editMonth}
-                  onChange={(e) => setEditMonth(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
-                >
-                  <option value="Agustus">Agustus (Bulan 4)</option>
-                  <option value="September">September (Bulan 5)</option>
-                  <option value="Oktober">Oktober (Bulan 6)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Bulan Timeline</label>
+                  <select
+                    value={editMonth}
+                    onChange={(e) => setEditMonth(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  >
+                    <option value="Agustus">Agustus (Bulan 4)</option>
+                    <option value="September">September (Bulan 5)</option>
+                    <option value="Oktober">Oktober (Bulan 6)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Tanggal Spesifik (Opsional)</label>
+                  <input
+                    type="date"
+                    value={editAuditDate}
+                    onChange={(e) => setEditAuditDate(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -429,7 +460,7 @@ export function ThreeMonthTimeline({
         </div>
       )}
 
-      {/* Add Checklist Modal */}
+      {/* ADD CHECKLIST MODAL */}
       {activeModalMonth && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-[#F7C6D9] shadow-2xl">
@@ -447,19 +478,31 @@ export function ThreeMonthTimeline({
             </div>
 
             <form onSubmit={handleCreateChecklist} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-700">Domain Audit</label>
-                <select
-                  value={newDomain}
-                  onChange={(e) => setNewDomain(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
-                >
-                  <option value="MQAA">MQAA (Manufacturing Quality Assurance Audit)</option>
-                  <option value="6S">6S (Sort, Set, Shine, Standardize, Sustain, Safety)</option>
-                  <option value="Visual Management">Visual Management</option>
-                  <option value="HSE">HSE (Health, Safety & Environment)</option>
-                  <option value="PS">PS (Process Standardization)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Domain Audit</label>
+                  <select
+                    value={newDomain}
+                    onChange={(e) => setNewDomain(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  >
+                    <option value="MQAA">MQAA</option>
+                    <option value="6S">6S</option>
+                    <option value="Visual Management">Visual Management</option>
+                    <option value="HSE">HSE</option>
+                    <option value="PS">PS</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Tanggal Spesifik (Opsional)</label>
+                  <input
+                    type="date"
+                    value={newAuditDate}
+                    onChange={(e) => setNewAuditDate(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#6A0DAD]"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { HeaderHero } from "@/components/HeaderHero";
 import { AuditAreaScope, AreaType } from "@/components/AuditAreaScope";
 import { ThreeMonthTimeline, ChecklistItem } from "@/components/ThreeMonthTimeline";
-import { WeeklyCadenceSection, WeeklyCadenceItem } from "@/components/WeeklyCadenceSection";
 import { AuditReportBuilder, AuditReportItem } from "@/components/AuditReportBuilder";
 import { DownloadResumeSection } from "@/components/DownloadResumeSection";
 import { SummaryDashboard } from "@/components/SummaryDashboard";
@@ -14,7 +13,6 @@ import { RefreshCw, CheckCircle2 } from "lucide-react";
 export default function DashboardPage() {
   const router = useRouter();
   const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
-  const [cadences, setCadences] = useState<WeeklyCadenceItem[]>([]);
   const [reports, setReports] = useState<AuditReportItem[]>([]);
   
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<AreaType>("All");
@@ -34,23 +32,20 @@ export default function DashboardPage() {
     else setIsRefreshing(true);
 
     try {
-      const [resChecklists, resWeekly, resReports] = await Promise.all([
+      const [resChecklists, resReports] = await Promise.all([
         fetch("/api/checklists"),
-        fetch("/api/weekly"),
         fetch("/api/reports"),
       ]);
 
-      if (resChecklists.status === 401 || resWeekly.status === 401 || resReports.status === 401) {
+      if (resChecklists.status === 401 || resReports.status === 401) {
         router.push("/login");
         return;
       }
 
       const dataChecklists = await resChecklists.json();
-      const dataWeekly = await resWeekly.json();
       const dataReports = await resReports.json();
 
       if (dataChecklists.success) setChecklists(dataChecklists.data);
-      if (dataWeekly.success) setCadences(dataWeekly.data);
       if (dataReports.success) setReports(dataReports.data);
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
@@ -113,6 +108,7 @@ export default function DashboardPage() {
     title: string;
     description: string;
     area: string;
+    auditDate?: string | null;
   }) {
     try {
       const res = await fetch("/api/checklists", {
@@ -134,7 +130,7 @@ export default function DashboardPage() {
 
   async function handleEditChecklist(
     id: number,
-    updatedItem: { month: string; domain: string; title: string; description: string; area: string }
+    updatedItem: { month: string; domain: string; title: string; description: string; area: string; auditDate?: string | null }
   ) {
     try {
       const res = await fetch("/api/checklists", {
@@ -171,105 +167,8 @@ export default function DashboardPage() {
     }
   }
 
-  // Weekly Cadence Handlers
-  async function handleAddWeek(weekData: Partial<WeeklyCadenceItem>) {
-    try {
-      const res = await fetch("/api/weekly", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(weekData),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setCadences((prev) => [...prev, data.data]);
-        showToast(`Minggu ${data.data.weekNumber} berhasil ditambahkan!`);
-      } else {
-        showToast(data.error || "Gagal menambah minggu.");
-      }
-    } catch {
-      showToast("Gagal menambah ritme minggu.");
-    }
-  }
-
-  async function handleUpdateWeekStatus(id: number, dayKey: string, nextStatus: string) {
-    // Optimistic update
-    setCadences((prev) =>
-      prev.map((cad) => (cad.id === id ? { ...cad, [dayKey]: nextStatus } : cad))
-    );
-
-    try {
-      const res = await fetch("/api/weekly", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, [dayKey]: nextStatus }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        loadData(true);
-        showToast("Gagal memperbarui status hari.");
-      } else {
-        showToast("Status aktivitas harian diperbarui.");
-      }
-    } catch {
-      loadData(true);
-      showToast("Terjadi kesalahan koneksi.");
-    }
-  }
-
-  async function handleUpdateWeekDayTask(
-    id: number,
-    dayTaskKey: string,
-    taskValue: string,
-    dayStatusKey: string,
-    statusValue: string
-  ) {
-    // Optimistic update
-    setCadences((prev) =>
-      prev.map((cad) =>
-        cad.id === id ? { ...cad, [dayTaskKey]: taskValue, [dayStatusKey]: statusValue } : cad
-      )
-    );
-
-    try {
-      const res = await fetch("/api/weekly", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          [dayTaskKey]: taskValue,
-          [dayStatusKey]: statusValue,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        loadData(true);
-        showToast("Gagal memperbarui aktivitas harian.");
-      } else {
-        showToast("Aktivitas harian berhasil diperbarui!");
-      }
-    } catch {
-      loadData(true);
-      showToast("Terjadi kesalahan koneksi.");
-    }
-  }
-
-  async function handleDeleteWeek(id: number) {
-    try {
-      const res = await fetch(`/api/weekly?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        setCadences((prev) => prev.filter((cad) => cad.id !== id));
-        showToast("Minggu berhasil dihapus.");
-      } else {
-        showToast(data.error || "Gagal menghapus minggu.");
-      }
-    } catch {
-      showToast("Gagal menghapus minggu.");
-    }
-  }
-
   // Audit Report Handlers
-  async function handleAddReport(reportData: Omit<AuditReportItem, "id">) {
+  async function handleAddReport(reportData: Omit<AuditReportItem, "id">): Promise<AuditReportItem | void> {
     const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -279,6 +178,7 @@ export default function DashboardPage() {
     if (data.success) {
       setReports((prev) => [data.data, ...prev]);
       showToast("Laporan audit berhasil disimpan!");
+      return data.data;
     } else {
       throw new Error(data.error || "Gagal menyimpan laporan.");
     }
@@ -396,22 +296,13 @@ export default function DashboardPage() {
           onDeleteChecklist={handleDeleteChecklist}
         />
 
-        {/* SECTION 4: Ritme Mingguan (Weekly Cadence) */}
-        <WeeklyCadenceSection
-          cadences={cadences}
-          onAddWeek={handleAddWeek}
-          onUpdateWeekStatus={handleUpdateWeekStatus}
-          onUpdateWeekDayTask={handleUpdateWeekDayTask}
-          onDeleteWeek={handleDeleteWeek}
-        />
-
         {/* FITUR EKSPOR OTOMATIS PDF: Download Resume (.pdf) Berdasarkan Filter Database */}
         <DownloadResumeSection
           checklists={checklists}
           reports={reports}
         />
 
-        {/* SECTION 5: Audit Report Builder (with 3 Required Columns) */}
+        {/* SECTION 5: Audit Report Builder (with 3 Required Columns & Single PDF Download) */}
         <AuditReportBuilder
           reports={reports}
           selectedAreaFilter={selectedAreaFilter}

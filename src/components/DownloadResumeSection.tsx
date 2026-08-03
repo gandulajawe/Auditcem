@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Filter, CheckCircle2, FileCheck, Calendar, Sparkles } from "lucide-react";
+import { Download, Filter, CheckCircle2, FileCheck } from "lucide-react";
 import { ChecklistItem } from "./ThreeMonthTimeline";
 import { AuditReportItem } from "./AuditReportBuilder";
-import { formatIndonesianDate, matchesMonthTimeline } from "@/lib/dateUtils";
+import { formatIndonesianDate } from "@/lib/dateUtils";
 import { generateAuditResumePDF } from "@/lib/pdfGenerator";
 
 interface DownloadResumeSectionProps {
@@ -13,8 +13,7 @@ interface DownloadResumeSectionProps {
 }
 
 export function DownloadResumeSection({ checklists, reports }: DownloadResumeSectionProps) {
-  // Filter States (Dropdowns & Date Selector ONLY - NO DATA ENTRY)
-  const [selectedTimeline, setSelectedTimeline] = useState<string>("All");
+  // Filter States (SIMPLIFIED: Date Picker, Domain, Area ONLY)
   const [selectedSpecificDate, setSelectedSpecificDate] = useState<string>("");
   const [selectedDomain, setSelectedDomain] = useState<string>("All");
   const [selectedArea, setSelectedArea] = useState<string>("All");
@@ -22,21 +21,24 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
 
   // Filter checklists
   const filteredChecklists = checklists.filter((item) => {
-    // If specific date is selected, check if item.month matches month of specific date or selectedTimeline
+    // If specific date is selected
     if (selectedSpecificDate) {
-      const monthMap: Record<number, string> = {
-        8: "Agustus",
-        9: "September",
-        10: "Oktober",
-      };
-      const parts = selectedSpecificDate.split("-");
-      if (parts.length === 3) {
-        const mNum = parseInt(parts[1], 10);
-        const expectedMonth = monthMap[mNum];
-        if (expectedMonth && item.month !== expectedMonth) return false;
+      if (item.auditDate) {
+        if (item.auditDate !== selectedSpecificDate) return false;
+      } else {
+        // If item doesn't have an auditDate, check if item.month matches month of selectedSpecificDate
+        const monthMap: Record<number, string> = {
+          8: "Agustus",
+          9: "September",
+          10: "Oktober",
+        };
+        const parts = selectedSpecificDate.split("-");
+        if (parts.length === 3) {
+          const mNum = parseInt(parts[1], 10);
+          const expectedMonth = monthMap[mNum];
+          if (expectedMonth && item.month !== expectedMonth) return false;
+        }
       }
-    } else if (selectedTimeline !== "All" && item.month !== selectedTimeline) {
-      return false;
     }
 
     // Domain filter
@@ -52,8 +54,6 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
     if (selectedSpecificDate) {
       const repDateClean = report.auditDate ? report.auditDate.split("T")[0] : "";
       if (repDateClean !== selectedSpecificDate) return false;
-    } else if (selectedTimeline !== "All" && !matchesMonthTimeline(report.auditDate, selectedTimeline)) {
-      return false;
     }
 
     // Domain filter
@@ -71,7 +71,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
 
     try {
       const doc = generateAuditResumePDF({
-        timelineFilter: selectedTimeline,
+        timelineFilter: "All",
         specificDateFilter: selectedSpecificDate,
         domainFilter: selectedDomain,
         areaFilter: selectedArea,
@@ -87,8 +87,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
       if (selectedSpecificDate) {
         filename = `Audit-Resume-${selectedSpecificDate}-${cleanDomain}-${cleanArea}.pdf`;
       } else {
-        const cleanTimeline = selectedTimeline.replace(/[^a-zA-Z0-9]/g, "");
-        filename = `Audit-Resume-${cleanTimeline}-${cleanDomain}-${cleanArea}.pdf`;
+        filename = `Audit-Resume-All-${cleanDomain}-${cleanArea}.pdf`;
       }
 
       doc.save(filename);
@@ -112,7 +111,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
             Download Resume Audit (.pdf)
           </h2>
           <p className="text-xs text-gray-500 mt-1 max-w-xl">
-            Pilih kriteria filter di bawah. Sistem otomatis merangkum data checklist dan laporan audit murni dari database dalam format PDF resmi tanpa perlu memasukkan data ulang.
+            Pilih kriteria filter di bawah. Sistem otomatis merangkum data checklist dan laporan audit murni dari database dalam format PDF resmi.
           </p>
         </div>
 
@@ -126,72 +125,49 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
         </button>
       </div>
 
-      {/* FILTER DROPDOWNS & DATE SELECTOR ONLY - NO FORM INPUT */}
+      {/* FILTER DROPDOWNS & DATE SELECTOR ONLY */}
       <div className="bg-[#FAF7FB] p-5 rounded-2xl border border-[#F2A7C6]/50 space-y-4">
         <div className="flex items-center gap-2 text-xs font-bold text-[#6A0DAD]">
           <Filter className="w-4 h-4 text-[#A569BD]" />
           <span>PILIH FILTER RINGKASAN DATA DATABASE</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Dropdown 1: Timeline Executions (Month) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 block">
-              1. Timeline (Bulan)
-            </label>
-            <select
-              value={selectedTimeline}
-              onChange={(e) => {
-                setSelectedTimeline(e.target.value);
-                // Clear specific date if timeline changes
-                setSelectedSpecificDate("");
-              }}
-              className="w-full p-2.5 bg-white border border-gray-200 focus:border-[#6A0DAD] rounded-xl text-xs font-bold outline-none cursor-pointer shadow-xs"
-            >
-              <option value="All">All (Agustus - Oktober)</option>
-              <option value="Agustus">Agustus (Bulan 4)</option>
-              <option value="September">September (Bulan 5)</option>
-              <option value="Oktober">Oktober (Bulan 6)</option>
-            </select>
-          </div>
-
-          {/* Filter 2: Specific Date Selector (Harian) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Filter 1: Tanggal Spesifik (Harian) */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block flex items-center justify-between">
-              <span>2. Tanggal Spesifik (Harian)</span>
+              <span>1. Tanggal Spesifik (Harian)</span>
               {selectedSpecificDate && (
                 <button
                   type="button"
                   onClick={() => setSelectedSpecificDate("")}
-                  className="text-[10px] text-[#6A0DAD] font-extrabold hover:underline"
+                  className="text-[10px] text-[#6A0DAD] font-extrabold hover:underline cursor-pointer"
                 >
                   Reset Tanggal
                 </button>
               )}
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={selectedSpecificDate}
-                onChange={(e) => setSelectedSpecificDate(e.target.value)}
-                className="w-full p-2.5 bg-white border border-gray-200 focus:border-[#6A0DAD] rounded-xl text-xs font-bold outline-none cursor-pointer shadow-xs"
-              />
-            </div>
+            <input
+              type="date"
+              value={selectedSpecificDate}
+              onChange={(e) => setSelectedSpecificDate(e.target.value)}
+              className="w-full p-2.5 bg-white border border-gray-200 focus:border-[#6A0DAD] rounded-xl text-xs font-bold outline-none cursor-pointer shadow-xs"
+            />
             {selectedSpecificDate ? (
               <span className="text-[10px] text-[#6A0DAD] font-extrabold block">
                 ✓ Filter Aktif: {formatIndonesianDate(selectedSpecificDate)}
               </span>
             ) : (
               <span className="text-[10px] text-gray-400 font-medium block">
-                Default: Semua tanggal di {selectedTimeline === "All" ? "Semua Bulan" : selectedTimeline}
+                Default: Semua Tanggal di Semua Bulan
               </span>
             )}
           </div>
 
-          {/* Dropdown 3: Domain Audit */}
+          {/* Filter 2: Domain Audit */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block">
-              3. Domain Audit
+              2. Domain Audit
             </label>
             <select
               value={selectedDomain}
@@ -207,10 +183,10 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
             </select>
           </div>
 
-          {/* Dropdown 4: Area */}
+          {/* Filter 3: Area Audit */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 block">
-              4. Area Audit
+              3. Area Audit
             </label>
             <select
               value={selectedArea}
@@ -230,7 +206,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
           <div className="flex items-center gap-4 flex-wrap">
             <span className="flex items-center gap-1.5 font-semibold text-gray-700">
               <CheckCircle2 className="w-4 h-4 text-[#6A0DAD]" />
-              Checklist Cocok: <strong className="text-[#6A0DAD]">{filteredChecklists.length} Item</strong> ({completedChecklistsCount} Selesai)
+              Checklist Cocok: <strong className="text-[#6A0DAD]">{filteredChecklists.length} Item</strong> ({completedChecklistsCount} Selesai - {checklistPercent}%)
             </span>
             <span>•</span>
             <span className="flex items-center gap-1.5 font-semibold text-gray-700">
@@ -240,7 +216,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
           </div>
 
           <span className="text-[11px] text-gray-400 font-bold">
-            Target PDF: {selectedSpecificDate ? `Audit-Resume-${selectedSpecificDate}-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf` : `Audit-Resume-${selectedTimeline.replace(/[^a-zA-Z0-9]/g, "")}-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf`}
+            Target PDF: {selectedSpecificDate ? `Audit-Resume-${selectedSpecificDate}-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf` : `Audit-Resume-All-${selectedDomain.replace(/[^a-zA-Z0-9]/g, "")}-${selectedArea.replace(/[^a-zA-Z0-9]/g, "")}.pdf`}
           </span>
         </div>
       </div>

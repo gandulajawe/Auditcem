@@ -13,6 +13,7 @@ export const auditChecklists = pgTable("audit_checklists", {
   title: text("title").notNull(),
   description: text("description"),
   area: text("area").default("All"), // 'Cutting', 'Prep', 'CSC', 'All'
+  auditDate: text("audit_date"), // YYYY-MM-DD (optional specific date)
   completed: boolean("completed").default(false).notNull(),
   completedAt: timestamp("completed_at"),
   completedBy: text("completed_by"),

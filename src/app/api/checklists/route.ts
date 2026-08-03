@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     const title = sanitizeInput(body.title || "");
     const description = sanitizeInput(body.description || "");
     const area = sanitizeInput(body.area || "All");
+    const auditDate = body.auditDate ? sanitizeInput(body.auditDate) : null;
 
     if (!title) {
       return NextResponse.json(
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
         title,
         description,
         area,
+        auditDate,
         completed: false,
         isCustom: true,
       })
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, completed, title, description, domain, area, month } = body;
+    const { id, completed, title, description, domain, area, month, auditDate } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -85,6 +87,7 @@ export async function PATCH(request: NextRequest) {
     if (domain !== undefined) updateData.domain = sanitizeInput(domain);
     if (area !== undefined) updateData.area = sanitizeInput(area);
     if (month !== undefined) updateData.month = sanitizeInput(month);
+    if (auditDate !== undefined) updateData.auditDate = auditDate ? sanitizeInput(auditDate) : null;
 
     const updated = await db
       .update(auditChecklists)
