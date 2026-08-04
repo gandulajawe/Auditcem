@@ -19,10 +19,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ukuran file melebihi batas 5MB." }, { status: 400 });
     }
 
-    // If BLOB_READ_WRITE_TOKEN is configured, use Vercel Blob
+    // If BLOB_READ_WRITE_TOKEN is configured, use Vercel Blob with unique random suffix
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const blob = await put(`audit-photos/${cleanFilename}`, file, {
         access: "public",
+        addRandomSuffix: true,
       });
       return NextResponse.json({ url: blob.url });
     }
