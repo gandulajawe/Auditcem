@@ -42,6 +42,11 @@ export async function POST(request: NextRequest) {
     const status = sanitizeInput(body.status || "Open");
     const auditDate = sanitizeInput(body.auditDate || new Date().toISOString().split("T")[0]);
 
+    // photoUrls array
+    const photoUrls: string[] = Array.isArray(body.photoUrls)
+      ? body.photoUrls.map((url: unknown) => (typeof url === "string" ? sanitizeInput(url) : ""))
+      : [];
+
     // Validate required fields
     if (!title || !findingDescription) {
       return NextResponse.json(
@@ -74,6 +79,7 @@ export async function POST(request: NextRequest) {
         severity,
         status,
         auditDate,
+        photoUrls: photoUrls.length > 0 ? photoUrls : null,
       })
       .returning();
 
@@ -112,6 +118,11 @@ export async function PATCH(request: NextRequest) {
     if (body.severity !== undefined) updateData.severity = sanitizeInput(body.severity);
     if (body.status !== undefined) updateData.status = sanitizeInput(body.status);
     if (body.auditDate !== undefined) updateData.auditDate = sanitizeInput(body.auditDate);
+    if (body.photoUrls !== undefined) {
+      updateData.photoUrls = Array.isArray(body.photoUrls)
+        ? body.photoUrls.map((url: unknown) => (typeof url === "string" ? sanitizeInput(url) : ""))
+        : null;
+    }
 
     const updated = await db
       .update(auditReports)

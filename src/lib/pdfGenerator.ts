@@ -12,8 +12,10 @@ interface PDFGeneratorOptions {
   reports: AuditReportItem[];
 }
 
+/**
+ * Generates formal black-and-white (monochrome) PDF for audit resumes.
+ */
 export function generateAuditResumePDF({
-  timelineFilter,
   specificDateFilter,
   domainFilter,
   areaFilter,
@@ -39,28 +41,29 @@ export function generateAuditResumePDF({
       doc.addPage();
       pageNum++;
       y = margin + 8;
-      // Page Header
+      // Monochrome Page Header
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(120, 120, 120);
+      doc.setTextColor(80, 80, 80);
       doc.text(
-        `The Audit Crucible — Resume Audit Lapangan (Halaman ${pageNum})`,
+        `THE AUDIT CRUCIBLE — RESUME AUDIT LAPANGAN (HALAMAN ${pageNum})`,
         margin,
         10
       );
-      doc.setDrawColor(220, 220, 220);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
       doc.line(margin, 12, pageWidth - margin, 12);
       y = 18;
     }
   }
 
-  // --- TOP ACCENT HEADER BAR ---
-  doc.setFillColor(106, 13, 173); // #6A0DAD
+  // --- TOP SOLID BLACK HEADER BAR ---
+  doc.setFillColor(0, 0, 0); // Black
   doc.rect(0, 0, pageWidth, 18, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(255, 255, 255); // White
   doc.text("THE AUDIT CRUCIBLE — CERTIFIED ENGINEERING MANAGER (CEM)", margin, 12);
 
   y = 26;
@@ -68,46 +71,44 @@ export function generateAuditResumePDF({
   // Title
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(106, 13, 173); // #6A0DAD
+  doc.setTextColor(0, 0, 0); // Black
   doc.text("Audit Crucible Resume Report", margin, y);
   y += 7;
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(60, 60, 60);
   doc.text("Pabrik Manufaktur Sepatu — Evaluasi Live On-Site Execution", margin, y);
   y += 8;
 
-  // Filter Box
-  doc.setFillColor(248, 243, 252);
-  doc.setDrawColor(242, 167, 198); // #F2A7C6 border
-  doc.roundedRect(margin, y, contentWidth, 28, 3, 3, "FD");
+  // Filter Box (Light Grey Box, Neutral Dark Border)
+  doc.setFillColor(249, 250, 251);
+  doc.setDrawColor(209, 213, 219);
+  doc.roundedRect(margin, y, contentWidth, 26, 2, 2, "FD");
 
   const todayStr = formatIndonesianDate(new Date().toISOString().split("T")[0]);
   const displayTimeline = specificDateFilter
     ? `Tanggal Spesifik: ${formatIndonesianDate(specificDateFilter)} (${specificDateFilter})`
-    : timelineFilter === "All"
-    ? "Semua Bulan (Agustus, September, Oktober)"
-    : timelineFilter;
+    : "Semua Tanggal di Semua Bulan";
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(106, 13, 173);
+  doc.setTextColor(0, 0, 0);
   doc.text("KRITERIA FILTER AKTIF:", margin + 4, y + 6);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(50, 50, 50);
+  doc.setTextColor(30, 30, 30);
   doc.text(`• Timeline / Tanggal : ${displayTimeline}`, margin + 6, y + 12);
   doc.text(`• Domain Audit      : ${domainFilter === "All" ? "Semua Domain (MQAA, 6S, VM, HSE, PS)" : domainFilter}`, margin + 6, y + 17);
-  doc.text(`• Area Audit        : ${areaFilter === "All" ? "Semua Area (Cutting, Prep, CSC)" : areaFilter}`, margin + 6, y + 22);
+  doc.text(`• Area Audit        : ${areaFilter === "All" ? "Semua Area (Cutting, Prep, CSC)" : areaFilter}`, margin + 6, y + 21);
   doc.text(`• Tanggal Generate  : ${todayStr}`, margin + 105, y + 12);
 
-  y += 34;
+  y += 32;
 
   // --- SECTION 1: RINGKASAN CHECKLIST ---
   checkNewPage(20);
-  doc.setFillColor(106, 13, 173); // #6A0DAD
+  doc.setFillColor(0, 0, 0); // Black Header Box
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -138,14 +139,10 @@ export function generateAuditResumePDF({
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
-      if (isCompleted) {
-        doc.setTextColor(106, 13, 173);
-      } else {
-        doc.setTextColor(180, 50, 50);
-      }
+      doc.setTextColor(0, 0, 0);
       doc.text(`${index + 1}. ${statusSymbol}`, margin + 2, y);
 
-      doc.setTextColor(30, 30, 30);
+      doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
       const titleLines = doc.splitTextToSize(item.title, contentWidth - 25);
       doc.text(titleLines, margin + 22, y);
@@ -153,13 +150,13 @@ export function generateAuditResumePDF({
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
+      doc.setTextColor(80, 80, 80);
       const dateTag = item.auditDate ? ` | Tanggal: ${formatIndonesianDate(item.auditDate)}` : "";
       doc.text(`Target: ${item.month} | Domain: ${item.domain} | Area: ${item.area || "All"}${dateTag}`, margin + 22, y);
       y += 4;
 
       if (item.description) {
-        doc.setTextColor(80, 80, 80);
+        doc.setTextColor(60, 60, 60);
         const descLines = doc.splitTextToSize(`Deskripsi: ${item.description}`, contentWidth - 25);
         doc.text(descLines, margin + 22, y);
         y += descLines.length * 3.8;
@@ -173,7 +170,7 @@ export function generateAuditResumePDF({
 
   // --- SECTION 2: DAFTAR LAPORAN AUDIT ---
   checkNewPage(20);
-  doc.setFillColor(106, 13, 173); // #6A0DAD
+  doc.setFillColor(0, 0, 0); // Black Header Box
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -194,19 +191,19 @@ export function generateAuditResumePDF({
 
       const indonesianDate = formatIndonesianDate(rep.auditDate);
 
-      // Report Header Box
-      doc.setFillColor(245, 240, 250);
-      doc.setDrawColor(200, 180, 220);
+      // Report Header Box (Formal Neutral Grey Box with Thin Black Border)
+      doc.setFillColor(249, 250, 251);
+      doc.setDrawColor(209, 213, 219);
       doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.setTextColor(106, 13, 173);
-      doc.text(`LAPORAN #${index + 1}: ${rep.title}`, margin + 3, y + 5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`LAPORAN #${index + 1}: ${rep.title.toUpperCase()}`, margin + 3, y + 5);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(60, 60, 60);
+      doc.setTextColor(50, 50, 50);
       doc.text(
         `Tanggal: ${indonesianDate} | Area: ${rep.area} | Domain: ${rep.domain} | Severity: ${rep.severity} | Status: ${rep.status}`,
         margin + 3,
@@ -218,74 +215,88 @@ export function generateAuditResumePDF({
       // Auditor
       doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(80, 80, 80);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Auditor: ${rep.auditorName}`, margin + 2, y);
       y += 5;
 
       // Deskripsi Temuan
       checkNewPage(12);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(106, 13, 173);
+      doc.setTextColor(0, 0, 0);
       doc.text("Deskripsi Temuan Lapangan:", margin + 2, y);
       y += 4;
 
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 40);
+      doc.setTextColor(30, 30, 30);
       const findingLines = doc.splitTextToSize(rep.findingDescription, contentWidth - 6);
       doc.text(findingLines, margin + 4, y);
       y += findingLines.length * 3.8 + 4;
 
-      // 3 REQUIRED COLUMNS
+      // 3 REQUIRED COLUMNS (Monochrome Style: Light Grey Fill, Black Bold Text)
       // 1. Root Cause Analysis
       checkNewPage(15);
-      doc.setFillColor(243, 234, 248);
+      doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(106, 13, 173);
+      doc.setTextColor(0, 0, 0);
       doc.text("1. Root Cause Analysis (Akar Masalah):", margin + 4, y + 3.5);
       y += 7;
 
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 40);
+      doc.setTextColor(30, 30, 30);
       const rcLines = doc.splitTextToSize(rep.rootCause, contentWidth - 8);
       doc.text(rcLines, margin + 6, y);
       y += rcLines.length * 3.8 + 4;
 
       // 2. Action Plan
       checkNewPage(15);
-      doc.setFillColor(252, 235, 242);
+      doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(224, 130, 168);
+      doc.setTextColor(0, 0, 0);
       doc.text("2. Action Plan Remediasi (Rencana Perbaikan):", margin + 4, y + 3.5);
       y += 7;
 
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 40);
+      doc.setTextColor(30, 30, 30);
       const apLines = doc.splitTextToSize(rep.actionPlan, contentWidth - 8);
       doc.text(apLines, margin + 6, y);
       y += apLines.length * 3.8 + 4;
 
       // 3. Lesson Learned
       checkNewPage(15);
-      doc.setFillColor(238, 242, 255);
+      doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(79, 70, 229);
+      doc.setTextColor(0, 0, 0);
       doc.text("3. Key Lesson Learned (Pembelajaran Utama):", margin + 4, y + 3.5);
       y += 7;
 
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 40);
+      doc.setTextColor(30, 30, 30);
       const llLines = doc.splitTextToSize(rep.lessonLearned, contentWidth - 8);
       doc.text(llLines, margin + 6, y);
-      y += llLines.length * 3.8 + 6;
+      y += llLines.length * 3.8 + 4;
+
+      // Attached photos info if present
+      if (rep.photoUrls && rep.photoUrls.length > 0) {
+        checkNewPage(8);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(80, 80, 80);
+        doc.text(
+          `Lampiran Foto Temuan: ${rep.photoUrls.length} foto terlampir (dapat dilihat di aplikasi)`,
+          margin + 2,
+          y
+        );
+        y += 5;
+      }
 
       // Divider line
-      doc.setDrawColor(220, 220, 220);
+      doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 6;
     });
@@ -294,9 +305,9 @@ export function generateAuditResumePDF({
   // Page Footer for last page
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.setTextColor(120, 120, 120);
+  doc.setTextColor(100, 100, 100);
   doc.text(
-    `Laporan Resume PDF Dihasilkan Otomatis oleh Portal Audit Crucible — Halaman ${pageNum}`,
+    `Dokumen Laporan Resume Resmi — Dihasilkan oleh Portal Audit Crucible (Halaman ${pageNum})`,
     margin,
     pageHeight - 8
   );
@@ -305,7 +316,7 @@ export function generateAuditResumePDF({
 }
 
 /**
- * Generates a PDF for a single specific audit report.
+ * Generates a formal black-and-white (monochrome) PDF for a single specific audit report.
  */
 export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   const doc = new jsPDF({
@@ -329,25 +340,26 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
       y = margin + 8;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(120, 120, 120);
+      doc.setTextColor(80, 80, 80);
       doc.text(
-        `Laporan Audit On-Site — ${rep.title} (Halaman ${pageNum})`,
+        `LAPORAN AUDIT ON-SITE — ${rep.title.toUpperCase()} (HALAMAN ${pageNum})`,
         margin,
         10
       );
-      doc.setDrawColor(220, 220, 220);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
       doc.line(margin, 12, pageWidth - margin, 12);
       y = 18;
     }
   }
 
-  // --- TOP ACCENT HEADER BAR ---
-  doc.setFillColor(106, 13, 173); // #6A0DAD
+  // --- TOP SOLID BLACK HEADER BAR ---
+  doc.setFillColor(0, 0, 0); // Solid Black
   doc.rect(0, 0, pageWidth, 18, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(255, 255, 255); // White
   doc.text("LAPORAN AUDIT LIVE ON-SITE — CERTIFIED ENGINEERING MANAGER", margin, 12);
 
   y = 26;
@@ -355,26 +367,26 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   // Title
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(106, 13, 173); // #6A0DAD
+  doc.setTextColor(0, 0, 0); // Black
   const titleLines = doc.splitTextToSize(rep.title, contentWidth);
   doc.text(titleLines, margin, y);
   y += titleLines.length * 6 + 4;
 
   const indonesianDate = formatIndonesianDate(rep.auditDate);
 
-  // Summary Metadata Card
-  doc.setFillColor(248, 243, 252);
-  doc.setDrawColor(242, 167, 198);
-  doc.roundedRect(margin, y, contentWidth, 24, 3, 3, "FD");
+  // Summary Metadata Card (Light Neutral Box, Dark Border)
+  doc.setFillColor(249, 250, 251);
+  doc.setDrawColor(209, 213, 219);
+  doc.roundedRect(margin, y, contentWidth, 24, 2, 2, "FD");
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(106, 13, 173);
+  doc.setTextColor(0, 0, 0);
   doc.text("METADATA LAPORAN AUDIT:", margin + 4, y + 6);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(50, 50, 50);
+  doc.setTextColor(30, 30, 30);
   doc.text(`• Tanggal Audit : ${indonesianDate} (${rep.auditDate})`, margin + 6, y + 12);
   doc.text(`• Area Audit    : ${rep.area}`, margin + 6, y + 17);
   doc.text(`• Domain Audit  : ${rep.domain}`, margin + 95, y + 12);
@@ -387,73 +399,87 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   checkNewPage(15);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(106, 13, 173);
+  doc.setTextColor(0, 0, 0);
   doc.text("Deskripsi Temuan Lapangan:", margin, y);
   y += 5;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(40, 40, 40);
+  doc.setTextColor(30, 30, 30);
   const findingLines = doc.splitTextToSize(rep.findingDescription, contentWidth);
   doc.text(findingLines, margin, y);
   y += findingLines.length * 4 + 6;
 
-  // 3 REQUIRED COLUMNS
+  // 3 REQUIRED COLUMNS (Monochrome Style)
   // 1. Root Cause Analysis
   checkNewPage(20);
-  doc.setFillColor(243, 234, 248);
+  doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(106, 13, 173);
+  doc.setTextColor(0, 0, 0);
   doc.text("1. Root Cause Analysis (Akar Masalah):", margin + 3, y + 4);
   y += 9;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(40, 40, 40);
+  doc.setTextColor(30, 30, 30);
   const rcLines = doc.splitTextToSize(rep.rootCause, contentWidth - 4);
   doc.text(rcLines, margin + 2, y);
   y += rcLines.length * 4 + 8;
 
   // 2. Action Plan
   checkNewPage(20);
-  doc.setFillColor(252, 235, 242);
+  doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(224, 130, 168);
+  doc.setTextColor(0, 0, 0);
   doc.text("2. Action Plan Remediasi (Rencana Perbaikan):", margin + 3, y + 4);
   y += 9;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(40, 40, 40);
+  doc.setTextColor(30, 30, 30);
   const apLines = doc.splitTextToSize(rep.actionPlan, contentWidth - 4);
   doc.text(apLines, margin + 2, y);
   y += apLines.length * 4 + 8;
 
   // 3. Lesson Learned
   checkNewPage(20);
-  doc.setFillColor(238, 242, 255);
+  doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(79, 70, 229);
+  doc.setTextColor(0, 0, 0);
   doc.text("3. Key Lesson Learned (Pembelajaran Utama):", margin + 3, y + 4);
   y += 9;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(40, 40, 40);
+  doc.setTextColor(30, 30, 30);
   const llLines = doc.splitTextToSize(rep.lessonLearned, contentWidth - 4);
   doc.text(llLines, margin + 2, y);
-  y += llLines.length * 4 + 10;
+  y += llLines.length * 4 + 8;
+
+  // Attached photos info if present
+  if (rep.photoUrls && rep.photoUrls.length > 0) {
+    checkNewPage(8);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    doc.text(
+      `Lampiran Foto Temuan: ${rep.photoUrls.length} foto terlampir (dapat dilihat di aplikasi)`,
+      margin,
+      y
+    );
+    y += 6;
+  }
 
   // Page Footer
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.setTextColor(120, 120, 120);
+  doc.setTextColor(100, 100, 100);
   doc.text(
     `Dokumen Laporan Audit On-Site Resmi — Dihasilkan oleh Dashboard Gandul`,
     margin,

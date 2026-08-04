@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2 } from "lucide-react";
+import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
 import { formatIndonesianDate } from "@/lib/dateUtils";
@@ -20,6 +20,7 @@ export interface AuditReportItem {
   severity: string; // 'Low', 'Medium', 'High', 'Critical'
   status: string; // 'Open', 'In Progress', 'Resolved'
   auditDate: string; // YYYY-MM-DD
+  photoUrls?: string[] | null;
   createdAt?: string;
 }
 
@@ -27,6 +28,7 @@ interface AuditReportBuilderProps {
   reports: AuditReportItem[];
   selectedAreaFilter: AreaType;
   onAddReport: (reportData: Omit<AuditReportItem, "id">) => Promise<AuditReportItem | void>;
+  onUpdateReport: (id: number, reportData: Partial<AuditReportItem>) => Promise<void>;
   onUpdateReportStatus: (id: number, newStatus: string) => Promise<void>;
   onDeleteReport: (id: number) => Promise<void>;
 }
@@ -35,15 +37,22 @@ export function AuditReportBuilder({
   reports,
   selectedAreaFilter,
   onAddReport,
+  onUpdateReport,
   onUpdateReportStatus,
   onDeleteReport,
 }: AuditReportBuilderProps) {
   const [showFormModal, setShowAddModal] = useState(false);
+  const [editingReport, setEditingReport] = useState<AuditReportItem | null>(null);
+  
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomainFilter, setSelectedDomainFilter] = useState("All");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("All");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Lightbox State
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Success Modal State for single report PDF download
   const [savedReportSuccess, setSavedReportSuccess] = useState<AuditReportItem | null>(null);
@@ -61,19 +70,16 @@ export function AuditReportBuilder({
     severity: "Medium",
     status: "Open",
     auditDate: new Date().toISOString().split("T")[0],
+    photoUrls: [] as string[],
   });
 
   const [formError, setFormError] = useState("");
 
   // Filtered reports
   const filteredReports = reports.filter((r) => {
-    // Area filter
     if (selectedAreaFilter !== "All" && r.area !== selectedAreaFilter) return false;
-    // Domain filter
     if (selectedDomainFilter !== "All" && r.domain !== selectedDomainFilter) return false;
-    // Status filter
     if (selectedStatusFilter !== "All" && r.status !== selectedStatusFilter) return false;
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const match =
@@ -87,6 +93,105 @@ export function AuditReportBuilder({
     }
     return true;
   });
+
+  function openCreateModal() {
+    setEditingReport(null);
+    setFormData({
+      title: "",
+      area: "Cutting",
+      domain: "MQAA",
+      findingDescription: "",
+      rootCause: "",
+      actionPlan: "",
+      lessonLearned: "",
+      auditorName: "Expert Auditor CEM",
+      severity: "Medium",
+      status: "Open",
+      auditDate: new Date().toISOString().split("T")[0],
+      photoUrls: [],
+    });
+    setFormError("");
+    setShowAddModal(true);
+  }
+
+  function openEditModal(report: AuditReportItem) {
+    setEditingReport(report);
+    setFormData({
+      title: report.title,
+      area: report.area,
+      domain: report.domain,
+      findingDescription: report.findingDescription,
+      rootCause: report.rootCause,
+      actionPlan: report.actionPlan,
+      lessonLearned: report.lessonLearned,
+      auditorName: report.auditorName,
+      severity: report.severity,
+      status: report.status,
+      auditDate: report.auditDate,
+      photoUrls: report.photoUrls ? [...report.photoUrls] : [],
+    });
+    setFormError("");
+    setShowAddModal(true);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (formData.photoUrls.length + files.length > 5) {
+      setFormError("Maksimal 5 foto per laporan.");
+      return;
+    }
+
+    setIsUploading(true);
+    setFormError("");
+
+    try {
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Check size: 5MB
+        if (file.size > 5 * 1024 * 1024) {
+          setFormError(`File "${file.name}" melebihi batas 5MB.`);
+          continue;
+        }
+
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: "POST",
+          body: file,
+        });
+
+        const data = await res.json();
+        if (res.ok && data.url) {
+          uploadedUrls.push(data.url);
+        } else {
+          setFormError(data.error || `Gagal mengunggah ${file.name}`);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          photoUrls: [...prev.photoUrls, ...uploadedUrls].slice(0, 5),
+        }));
+      }
+    } catch (err) {
+      console.error("Upload error:", err);
+      setFormError("Gagal mengunggah foto.");
+    } finally {
+      setIsUploading(false);
+      // Reset input value
+      e.target.value = "";
+    }
+  }
+
+  function handleRemovePhoto(indexToRemove: number) {
+    setFormData((prev) => ({
+      ...prev,
+      photoUrls: prev.photoUrls.filter((_, idx) => idx !== indexToRemove),
+    }));
+  }
 
   async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,18 +209,21 @@ export function AuditReportBuilder({
 
     setIsSubmitting(true);
     try {
-      const createdReport = await onAddReport({ ...formData });
-      setShowAddModal(false);
-
-      // If created report returned, show success modal with PDF download option
-      if (createdReport) {
-        setSavedReportSuccess(createdReport);
+      if (editingReport) {
+        // Edit existing report
+        await onUpdateReport(editingReport.id, { ...formData });
+        setShowAddModal(false);
+        setSavedReportSuccess({ id: editingReport.id, ...formData });
       } else {
-        // Fallback construct mock object for PDF download
-        setSavedReportSuccess({
-          id: Date.now(),
-          ...formData,
-        });
+        // Create new report
+        const createdReport = await onAddReport({ ...formData });
+        setShowAddModal(false);
+
+        if (createdReport) {
+          setSavedReportSuccess(createdReport);
+        } else {
+          setSavedReportSuccess({ id: Date.now(), ...formData });
+        }
       }
 
       // Reset form
@@ -131,7 +239,9 @@ export function AuditReportBuilder({
         severity: "Medium",
         status: "Open",
         auditDate: new Date().toISOString().split("T")[0],
+        photoUrls: [],
       });
+      setEditingReport(null);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Gagal menyimpan laporan.");
     } finally {
@@ -192,7 +302,7 @@ export function AuditReportBuilder({
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={openCreateModal}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] hover:to-[#9455AC] text-white font-bold text-xs rounded-xl shadow-lg shadow-[#6A0DAD]/20 transition-all active:scale-95 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
@@ -288,6 +398,14 @@ export function AuditReportBuilder({
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getSeverityBadge(report.severity)}`}>
                         {report.severity} Severity
                       </span>
+
+                      {/* Photo indicator badge if report has photoUrls */}
+                      {report.photoUrls && report.photoUrls.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 font-bold text-[10px] rounded-md border border-gray-300">
+                          <ImageIcon className="w-3 h-3 text-[#6A0DAD]" />
+                          {report.photoUrls.length} Foto
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="font-extrabold text-gray-900 text-base hover:text-[#6A0DAD] transition-colors leading-snug">
@@ -343,7 +461,7 @@ export function AuditReportBuilder({
                   </div>
                 </div>
 
-                {/* Expanded 3 REQUIRED COLUMNS View */}
+                {/* Expanded View */}
                 {isExpanded && (
                   <div className="p-5 bg-[#FAF7FB] border-t border-gray-100 space-y-4 animate-fadeIn">
                     <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-xl border border-gray-200 gap-2">
@@ -368,10 +486,39 @@ export function AuditReportBuilder({
                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
                         Deskripsi Temuan Audit
                       </span>
-                      <p className="text-xs font-semibold text-gray-800 bg-white p-3 rounded-xl border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-800 bg-white p-3 rounded-xl border border-gray-200 whitespace-pre-line">
                         {report.findingDescription}
                       </p>
                     </div>
+
+                    {/* PHOTO GALLERY IN EXPANDED VIEW */}
+                    {report.photoUrls && report.photoUrls.length > 0 && (
+                      <div className="space-y-2 bg-white p-3.5 rounded-xl border border-gray-200">
+                        <span className="text-xs font-bold text-[#6A0DAD] flex items-center gap-1.5 uppercase tracking-wider">
+                          <ImageIcon className="w-4 h-4 text-[#A569BD]" />
+                          Foto / Media Temuan Lapangan ({report.photoUrls.length} Foto)
+                        </span>
+                        <div className="flex flex-wrap gap-2.5 pt-1">
+                          {report.photoUrls.map((url, imgIdx) => (
+                            <div
+                              key={imgIdx}
+                              onClick={() => setLightboxImage(url)}
+                              className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200 shadow-xs cursor-pointer group hover:opacity-90 transition-opacity"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt={`Foto ${imgIdx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Eye className="w-5 h-5" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* 3 Required Analysis Columns */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -415,10 +562,10 @@ export function AuditReportBuilder({
                       </div>
                     </div>
 
-                    {/* Bottom Action Footer */}
+                    {/* Bottom Action Footer with EDIT REPORT BUTTON */}
                     <div className="pt-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-700">Ubah Status Laporan:</span>
+                        <span className="font-bold text-gray-700">Ubah Status:</span>
                         <button
                           onClick={() => onUpdateReportStatus(report.id, "Open")}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[11px] cursor-pointer ${
@@ -445,13 +592,24 @@ export function AuditReportBuilder({
                         </button>
                       </div>
 
-                      <button
-                        onClick={() => onDeleteReport(report.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl font-bold cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Hapus Laporan Ini</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* EDIT REPORT BUTTON */}
+                        <button
+                          onClick={() => openEditModal(report)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[#6A0DAD] bg-purple-100 hover:bg-purple-200 rounded-xl font-bold cursor-pointer transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit Laporan Ini</span>
+                        </button>
+
+                        <button
+                          onClick={() => onDeleteReport(report.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl font-bold cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hapus Laporan Ini</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -460,6 +618,26 @@ export function AuditReportBuilder({
           })
         )}
       </div>
+
+      {/* LIGHTBOX MODAL FOR ENLARGING PHOTOS */}
+      {lightboxImage && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center justify-center space-y-3">
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-2 right-2 p-2 bg-black/50 text-white hover:bg-black rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxImage}
+              alt="Foto Temuan Enlarge"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl border border-white/20"
+            />
+          </div>
+        </div>
+      )}
 
       {/* SUCCESS CONFIRMATION MODAL WITH PDF DOWNLOAD BUTTON */}
       {savedReportSuccess && (
@@ -483,6 +661,9 @@ export function AuditReportBuilder({
               <p className="text-gray-600">• Area: {savedReportSuccess.area} | Domain: {savedReportSuccess.domain}</p>
               <p className="text-gray-600">• Tanggal: {formatIndonesianDate(savedReportSuccess.auditDate)}</p>
               <p className="text-gray-600">• Auditor: {savedReportSuccess.auditorName}</p>
+              {savedReportSuccess.photoUrls && savedReportSuccess.photoUrls.length > 0 && (
+                <p className="text-gray-600">• Lampiran Foto: {savedReportSuccess.photoUrls.length} File</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-2 pt-2">
@@ -505,7 +686,7 @@ export function AuditReportBuilder({
         </div>
       )}
 
-      {/* Create New Report Modal */}
+      {/* CREATE & EDIT REPORT MODAL */}
       {showFormModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 border border-[#F7C6D9] shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -513,15 +694,15 @@ export function AuditReportBuilder({
               <div>
                 <h3 className="text-xl font-extrabold text-[#6A0DAD] flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-[#A569BD]" />
-                  Buat Laporan Audit Baru (Live On-Site Execution)
+                  {editingReport ? "Edit Laporan Audit On-Site" : "Buat Laporan Audit Baru (Live On-Site Execution)"}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Lengkapi 3 kolom wajib analisis akar masalah, rencana aksi, dan insight pembelajaran.
+                  Lengkapi 3 kolom wajib analisis akar masalah, rencana aksi, dan upload media bukti temuan.
                 </p>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600 font-bold text-lg"
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>
@@ -626,6 +807,56 @@ export function AuditReportBuilder({
                 />
               </div>
 
+              {/* MEDIA / PHOTO UPLOAD SECTION */}
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-[#6A0DAD]" />
+                    Foto / Media Temuan (Opsional - Maks. 5 foto, 5MB per file)
+                  </label>
+                  <span className="text-[10px] text-gray-500 font-bold">
+                    {formData.photoUrls.length} / 5 Terpilih
+                  </span>
+                </div>
+
+                {formData.photoUrls.length < 5 && (
+                  <div>
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-[#A569BD]/50 hover:bg-[#F7C6D9]/30 text-[#6A0DAD] text-xs font-bold rounded-xl cursor-pointer shadow-xs transition-colors">
+                      <ImageIcon className="w-4 h-4" />
+                      <span>{isUploading ? "Mengunggah..." : "+ Pilih File Foto (JPG, PNG, WEBP)"}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        onChange={handleFileUpload}
+                        disabled={isUploading}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {/* Previews of uploaded images */}
+                {formData.photoUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    {formData.photoUrls.map((url, idx) => (
+                      <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(idx)}
+                          className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full text-xs shadow-md hover:bg-rose-700 transition-colors"
+                          title="Hapus foto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* 3 REQUIRED ANALYSIS COLUMNS */}
               <div className="p-4 bg-[#FAF7FB] border border-[#F2A7C6]/60 rounded-2xl space-y-3">
                 <span className="text-xs font-extrabold text-[#6A0DAD] uppercase tracking-wider block">
@@ -690,10 +921,10 @@ export function AuditReportBuilder({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploading}
                   className="flex-1 py-3 text-xs font-bold text-white bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] rounded-xl shadow-lg cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? "Menyimpan Laporan..." : "Simpan Laporan Audit"}
+                  {isSubmitting ? "Menyimpan Laporan..." : editingReport ? "Simpan Perubahan Laporan" : "Simpan Laporan Audit"}
                 </button>
               </div>
             </form>

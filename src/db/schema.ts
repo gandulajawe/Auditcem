@@ -54,6 +54,7 @@ export const auditReports = pgTable("audit_reports", {
   severity: text("severity").default("Medium").notNull(), // 'Low', 'Medium', 'High', 'Critical'
   status: text("status").default("Open").notNull(), // 'Open', 'In Progress', 'Resolved'
   auditDate: text("audit_date").notNull(), // YYYY-MM-DD
+  photoUrls: text("photo_urls").array(), // Optional uploaded photo URLs
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

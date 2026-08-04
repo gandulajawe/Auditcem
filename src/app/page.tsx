@@ -184,6 +184,23 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleUpdateReport(id: number, reportData: Partial<AuditReportItem>) {
+    const res = await fetch("/api/reports", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...reportData }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setReports((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...data.data } : r))
+      );
+      showToast("Laporan audit berhasil diperbarui!");
+    } else {
+      throw new Error(data.error || "Gagal memperbarui laporan.");
+    }
+  }
+
   async function handleUpdateReportStatus(id: number, newStatus: string) {
     setReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
@@ -302,11 +319,12 @@ export default function DashboardPage() {
           reports={reports}
         />
 
-        {/* SECTION 5: Audit Report Builder (with 3 Required Columns & Single PDF Download) */}
+        {/* SECTION 5: Audit Report Builder (with 3 Required Columns, Edit, Photo Upload & Single PDF Download) */}
         <AuditReportBuilder
           reports={reports}
           selectedAreaFilter={selectedAreaFilter}
           onAddReport={handleAddReport}
+          onUpdateReport={handleUpdateReport}
           onUpdateReportStatus={handleUpdateReportStatus}
           onDeleteReport={handleDeleteReport}
         />
