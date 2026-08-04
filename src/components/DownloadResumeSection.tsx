@@ -66,11 +66,11 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
   const completedChecklistsCount = filteredChecklists.filter((c) => c.completed).length;
   const checklistPercent = filteredChecklists.length > 0 ? Math.round((completedChecklistsCount / filteredChecklists.length) * 100) : 0;
 
-  function handleDownloadPDF() {
+  async function handleDownloadPDF() {
     setIsDownloading(true);
 
     try {
-      const doc = generateAuditResumePDF({
+      const doc = await generateAuditResumePDF({
         timelineFilter: "All",
         specificDateFilter: selectedSpecificDate,
         domainFilter: selectedDomain,

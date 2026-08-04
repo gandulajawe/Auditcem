@@ -249,9 +249,9 @@ export function AuditReportBuilder({
     }
   }
 
-  function handleDownloadSinglePDF(report: AuditReportItem) {
+  async function handleDownloadSinglePDF(report: AuditReportItem) {
     try {
-      const doc = generateSingleReportPDF(report);
+      const doc = await generateSingleReportPDF(report);
       const cleanTitle = report.title.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
       const filename = `Laporan-Audit-${cleanTitle}-${report.auditDate}.pdf`;
       doc.save(filename);
@@ -846,7 +846,7 @@ export function AuditReportBuilder({
                         <button
                           type="button"
                           onClick={() => handleRemovePhoto(idx)}
-                          className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full text-xs shadow-md hover:bg-rose-700 transition-colors"
+                          className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full text-xs shadow-md hover:bg-rose-700 transition-colors cursor-pointer"
                           title="Hapus foto"
                         >
                           <X className="w-3.5 h-3.5" />

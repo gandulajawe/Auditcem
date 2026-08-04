@@ -13,15 +13,42 @@ interface PDFGeneratorOptions {
 }
 
 /**
+ * Fetches an image URL and converts it to a base64 Data URL for jsPDF embedding.
+ * Returns null gracefully if fetch fails so PDF generation never crashes.
+ */
+async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; format: "JPEG" | "PNG" | "WEBP" } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const buffer = await blob.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+    const mime = blob.type.toLowerCase();
+
+    let format: "JPEG" | "PNG" | "WEBP" = "JPEG";
+    if (mime.includes("png")) format = "PNG";
+    else if (mime.includes("webp")) format = "WEBP";
+
+    return {
+      dataUrl: `data:${mime || "image/jpeg"};base64,${base64}`,
+      format,
+    };
+  } catch (error) {
+    console.error("Failed to fetch image for PDF:", url, error);
+    return null;
+  }
+}
+
+/**
  * Generates formal black-and-white (monochrome) PDF for audit resumes.
  */
-export function generateAuditResumePDF({
+export async function generateAuditResumePDF({
   specificDateFilter,
   domainFilter,
   areaFilter,
   checklists,
   reports,
-}: PDFGeneratorOptions): jsPDF {
+}: PDFGeneratorOptions): Promise<jsPDF> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -46,7 +73,7 @@ export function generateAuditResumePDF({
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
       doc.text(
-        `THE AUDIT CRUCIBLE — RESUME AUDIT LAPANGAN (HALAMAN ${pageNum})`,
+        `LAPORAN AUDIT GANDUL — RESUME LAPANGAN (HALAMAN ${pageNum})`,
         margin,
         10
       );
@@ -64,7 +91,7 @@ export function generateAuditResumePDF({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255); // White
-  doc.text("THE AUDIT CRUCIBLE — CERTIFIED ENGINEERING MANAGER (CEM)", margin, 12);
+  doc.text("LAPORAN AUDIT GANDUL", margin, 12);
 
   y = 26;
 
@@ -186,12 +213,13 @@ export function generateAuditResumePDF({
     doc.text("Tidak ada laporan audit yang cocok dengan filter aktif.", margin + 2, y);
     y += 8;
   } else {
-    reports.forEach((rep, index) => {
+    for (let index = 0; index < reports.length; index++) {
+      const rep = reports[index];
       checkNewPage(35);
 
       const indonesianDate = formatIndonesianDate(rep.auditDate);
 
-      // Report Header Box (Formal Neutral Grey Box with Thin Black Border)
+      // Report Header Box
       doc.setFillColor(249, 250, 251);
       doc.setDrawColor(209, 213, 219);
       doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
@@ -232,7 +260,7 @@ export function generateAuditResumePDF({
       doc.text(findingLines, margin + 4, y);
       y += findingLines.length * 3.8 + 4;
 
-      // 3 REQUIRED COLUMNS (Monochrome Style: Light Grey Fill, Black Bold Text)
+      // 3 REQUIRED COLUMNS
       // 1. Root Cause Analysis
       checkNewPage(15);
       doc.setFillColor(243, 244, 246);
@@ -281,25 +309,67 @@ export function generateAuditResumePDF({
       doc.text(llLines, margin + 6, y);
       y += llLines.length * 3.8 + 4;
 
-      // Attached photos info if present
+      // Embedded Photos
       if (rep.photoUrls && rep.photoUrls.length > 0) {
-        checkNewPage(8);
+        checkNewPage(20);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(80, 80, 80);
-        doc.text(
-          `Lampiran Foto Temuan: ${rep.photoUrls.length} foto terlampir (dapat dilihat di aplikasi)`,
-          margin + 2,
-          y
-        );
+        doc.setFontSize(8.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Lampiran Foto Temuan Lapangan:", margin + 2, y);
         y += 5;
+
+        const photoWidth = 52; // mm
+        const photoHeight = 38; // mm
+        const gap = 6; // mm
+        const maxPerRow = 3;
+        let renderedRows = 0;
+
+        for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
+          const photoUrl = rep.photoUrls[pIdx];
+          const imgData = await fetchImageAsDataUrl(photoUrl);
+
+          if (imgData) {
+            const col = pIdx % maxPerRow;
+            if (col === 0 && pIdx > 0) {
+              y += photoHeight + 8;
+              renderedRows++;
+            }
+            checkNewPage(photoHeight + 8);
+
+            const xPos = margin + 2 + col * (photoWidth + gap);
+
+            try {
+              doc.addImage(
+                imgData.dataUrl,
+                imgData.format,
+                xPos,
+                y,
+                photoWidth,
+                photoHeight
+              );
+              // Border
+              doc.setDrawColor(200, 200, 200);
+              doc.rect(xPos, y, photoWidth, photoHeight);
+
+              // Caption
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(7.5);
+              doc.setTextColor(80, 80, 80);
+              doc.text(`Foto ${pIdx + 1}`, xPos + 2, y + photoHeight + 4);
+            } catch (err) {
+              console.error("Error drawing photo in PDF:", err);
+            }
+          }
+        }
+
+        y += photoHeight + 8;
       }
 
       // Divider line
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 6;
-    });
+    }
   }
 
   // Page Footer for last page
@@ -316,9 +386,9 @@ export function generateAuditResumePDF({
 }
 
 /**
- * Generates a formal black-and-white (monochrome) PDF for a single specific audit report.
+ * Generates a formal black-and-white (monochrome) PDF for a single specific audit report with embedded photos.
  */
-export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
+export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsPDF> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -342,7 +412,7 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
       doc.text(
-        `LAPORAN AUDIT ON-SITE — ${rep.title.toUpperCase()} (HALAMAN ${pageNum})`,
+        `LAPORAN AUDIT GANDUL — ${rep.title.toUpperCase()} (HALAMAN ${pageNum})`,
         margin,
         10
       );
@@ -360,7 +430,7 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255); // White
-  doc.text("LAPORAN AUDIT LIVE ON-SITE — CERTIFIED ENGINEERING MANAGER", margin, 12);
+  doc.text("LAPORAN AUDIT GANDUL", margin, 12);
 
   y = 26;
 
@@ -374,7 +444,7 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
 
   const indonesianDate = formatIndonesianDate(rep.auditDate);
 
-  // Summary Metadata Card (Light Neutral Box, Dark Border)
+  // Summary Metadata Card
   doc.setFillColor(249, 250, 251);
   doc.setDrawColor(209, 213, 219);
   doc.roundedRect(margin, y, contentWidth, 24, 2, 2, "FD");
@@ -410,7 +480,7 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   doc.text(findingLines, margin, y);
   y += findingLines.length * 4 + 6;
 
-  // 3 REQUIRED COLUMNS (Monochrome Style)
+  // 3 REQUIRED COLUMNS
   // 1. Root Cause Analysis
   checkNewPage(20);
   doc.setFillColor(243, 244, 246);
@@ -462,18 +532,58 @@ export function generateSingleReportPDF(rep: AuditReportItem): jsPDF {
   doc.text(llLines, margin + 2, y);
   y += llLines.length * 4 + 8;
 
-  // Attached photos info if present
+  // Embedded Photos for Single Report
   if (rep.photoUrls && rep.photoUrls.length > 0) {
-    checkNewPage(8);
+    checkNewPage(20);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-    doc.text(
-      `Lampiran Foto Temuan: ${rep.photoUrls.length} foto terlampir (dapat dilihat di aplikasi)`,
-      margin,
-      y
-    );
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Lampiran Foto Temuan Lapangan:", margin, y);
     y += 6;
+
+    const photoWidth = 52; // mm
+    const photoHeight = 38; // mm
+    const gap = 6; // mm
+    const maxPerRow = 3;
+
+    for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
+      const photoUrl = rep.photoUrls[pIdx];
+      const imgData = await fetchImageAsDataUrl(photoUrl);
+
+      if (imgData) {
+        const col = pIdx % maxPerRow;
+        if (col === 0 && pIdx > 0) {
+          y += photoHeight + 8;
+        }
+        checkNewPage(photoHeight + 8);
+
+        const xPos = margin + col * (photoWidth + gap);
+
+        try {
+          doc.addImage(
+            imgData.dataUrl,
+            imgData.format,
+            xPos,
+            y,
+            photoWidth,
+            photoHeight
+          );
+          // Border
+          doc.setDrawColor(200, 200, 200);
+          doc.rect(xPos, y, photoWidth, photoHeight);
+
+          // Caption
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(80, 80, 80);
+          doc.text(`Foto ${pIdx + 1}`, xPos + 2, y + photoHeight + 4);
+        } catch (err) {
+          console.error("Error drawing photo in single report PDF:", err);
+        }
+      }
+    }
+
+    y += photoHeight + 8;
   }
 
   // Page Footer
