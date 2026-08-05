@@ -7,6 +7,19 @@ import { AreaType } from "./AuditAreaScope";
 import { formatIndonesianDate } from "@/lib/dateUtils";
 import { generateSingleReportPDF } from "@/lib/pdfGenerator";
 
+export interface ActionPlanRow {
+  horizon: "Jangka Pendek" | "Jangka Panjang";
+  category: "Corrective Action" | "Preventive Action";
+  action: string;
+  rationale: string;
+  targetSla: string;
+}
+
+export interface AuditAnalysisResult {
+  summary: string;
+  actionPlanTable: ActionPlanRow[];
+}
+
 export interface AuditReportItem {
   id: number;
   title: string;
@@ -152,7 +165,6 @@ export function AuditReportBuilder({
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // Check size: 5MB
         if (file.size > 5 * 1024 * 1024) {
           setFormError(`File "${file.name}" melebihi batas 5MB.`);
           continue;
@@ -209,6 +221,7 @@ export function AuditReportBuilder({
         body: JSON.stringify({
           description: formData.findingDescription,
           area: formData.area,
+          domain: formData.domain,
           severity: formData.severity,
         }),
       });
@@ -218,7 +231,7 @@ export function AuditReportBuilder({
       if (res.ok && data.success) {
         setFormData((prev) => ({
           ...prev,
-          rootCause: data.rootCause || prev.rootCause,
+          rootCause: data.rootCause || data.summary || prev.rootCause,
           actionPlan: data.actionPlan || prev.actionPlan,
         }));
       } else {
@@ -249,12 +262,10 @@ export function AuditReportBuilder({
     setIsSubmitting(true);
     try {
       if (editingReport) {
-        // Edit existing report
         await onUpdateReport(editingReport.id, { ...formData });
         setShowAddModal(false);
         setSavedReportSuccess({ id: editingReport.id, ...formData });
       } else {
-        // Create new report
         const createdReport = await onAddReport({ ...formData });
         setShowAddModal(false);
 
@@ -265,7 +276,6 @@ export function AuditReportBuilder({
         }
       }
 
-      // Reset form
       setFormData({
         title: "",
         area: "Cutting",
@@ -324,7 +334,7 @@ export function AuditReportBuilder({
   }
 
   return (
-    <section className="bg-white rounded-3xl p-6 shadow-md border border-[#F7C6D9] space-y-6">
+    <section id="report-builder-section" className="bg-white rounded-3xl p-6 shadow-md border border-[#F7C6D9] space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
