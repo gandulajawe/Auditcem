@@ -1,24 +1,23 @@
+// File: src/lib/sanitize.ts
+
 /**
- * Sanitizes input strings to prevent XSS and malicious scripts.
- * Strips <script>, <iframe>, <object>, <embed> tags and their content.
- * Blocks javascript: and data:text/html URLs.
- * Truncates string to maxLength (default 2000 characters).
+ * Sanitizes input data recursively to prevent XSS attacks.
+ * Strips dangerous HTML tags (<script>, <iframe>, <object>, <embed>), inline handlers,
+ * javascript: and data:text/html schemes.
  */
-export function sanitizeInput(input: unknown, maxLength: number = 2000): string {
-  if (typeof input !== "string") {
-    return "";
-  }
+export function sanitizeString(input: string, maxLength: number = 2000): string {
+  if (typeof input !== "string") return "";
 
   let sanitized = input
-    // Remove potential script tags and content
+    // Remove script tags and content
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    // Remove potential iframe tags and content
+    // Remove iframe tags and content
     .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
-    // Remove potential object tags and content
+    // Remove object tags and content
     .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
-    // Remove potential embed tags and content
+    // Remove embed tags and content
     .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
-    // Remove inline event handlers like onload, onerror, etc.
+    // Remove inline event handlers
     .replace(/on\w+="[^"]*"/gi, "")
     .replace(/on\w+='[^']*'/gi, "")
     .replace(/on\w+=\w+/gi, "")
@@ -26,13 +25,12 @@ export function sanitizeInput(input: unknown, maxLength: number = 2000): string 
     .replace(/javascript:[^\s"']*/gi, "")
     // Remove data:text/html URLs
     .replace(/data:text\/html[^\s"']*/gi, "")
-    // Strip HTML tags if any (keep plain text for safety)
+    // Strip remaining HTML tags
     .replace(/<[^>]*>?/gm, "")
     // Remove null bytes
     .replace(/\0/g, "")
     .trim();
 
-  // Enforce maxLength
   if (sanitized.length > maxLength) {
     sanitized = sanitized.slice(0, maxLength);
   }
@@ -40,35 +38,34 @@ export function sanitizeInput(input: unknown, maxLength: number = 2000): string 
   return sanitized;
 }
 
-/**
- * Helper to recursively sanitize values (strings, arrays, nested objects).
- */
-export function sanitizeValue<T>(val: T, maxLength: number = 2000): T {
-  if (typeof val === "string") {
-    return sanitizeInput(val, maxLength) as unknown as T;
+export function sanitizeInput(data: any): any {
+  if (data === null || data === undefined) {
+    return data;
   }
-  if (Array.isArray(val)) {
-    return val.map((item) => sanitizeValue(item, maxLength)) as unknown as T;
+
+  if (typeof data === "string") {
+    return sanitizeString(data);
   }
-  if (val !== null && typeof val === "object" && val.constructor === Object) {
-    return sanitizeObject(val as Record<string, unknown>, maxLength) as unknown as T;
+
+  if (typeof data === "number" || typeof data === "boolean") {
+    return data;
   }
-  return val;
+
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeInput(item));
+  }
+
+  if (typeof data === "object") {
+    const sanitizedObj: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      sanitizedObj[key] = sanitizeInput(data[key]);
+    }
+    return sanitizedObj;
+  }
+
+  return data;
 }
 
-/**
- * Object sanitizer helper that handles nested objects and arrays of strings recursively.
- */
-export function sanitizeObject<T extends Record<string, unknown>>(
-  obj: T,
-  maxLength: number = 2000
-): T {
-  if (!obj || typeof obj !== "object") return obj;
-  const sanitized = { ...obj };
-  for (const key in sanitized) {
-    if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
-      sanitized[key] = sanitizeValue(sanitized[key], maxLength);
-    }
-  }
-  return sanitized;
+export function sanitizeObject<T extends Record<string, any>>(obj: T): T {
+  return sanitizeInput(obj) as T;
 }

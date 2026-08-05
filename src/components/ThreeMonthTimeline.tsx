@@ -147,7 +147,7 @@ export function ThreeMonthTimeline({
   }
 
   return (
-    <section className="space-y-6">
+    <section id="timeline-section" className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className="text-xs font-bold text-[#A569BD] tracking-wider uppercase">
@@ -564,3 +564,5 @@ export function ThreeMonthTimeline({
     </section>
   );
 }
+
+export default ThreeMonthTimeline;

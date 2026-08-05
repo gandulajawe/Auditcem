@@ -1,22 +1,18 @@
+// File: src/lib/pdfGenerator.ts
 import jsPDF from "jspdf";
 import { formatIndonesianDate } from "./dateUtils";
-import { ChecklistItem } from "@/components/ThreeMonthTimeline";
-import { AuditReportItem } from "@/components/AuditReportBuilder";
 
 interface PDFGeneratorOptions {
-  timelineFilter: string;
-  specificDateFilter: string;
-  domainFilter: string;
-  areaFilter: string;
-  checklists: ChecklistItem[];
-  reports: AuditReportItem[];
+  timelineFilter?: string;
+  specificDateFilter?: string;
+  domainFilter?: string;
+  areaFilter?: string;
+  checklists?: any[];
+  reports?: any[];
 }
 
-/**
- * Fetches an image URL and converts it to a base64 Data URL for jsPDF embedding.
- * Returns null gracefully if fetch fails so PDF generation never crashes.
- */
 async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; format: "JPEG" | "PNG" | "WEBP" } | null> {
+  if (!url || typeof url !== "string") return null;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -41,14 +37,16 @@ async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; form
 
 /**
  * Generates formal black-and-white (monochrome) PDF for audit resumes.
+ * Returns jsPDF instance which supports .output("arraybuffer"), .output("uint8array"), and .save(filename).
  */
-export async function generateAuditResumePDF({
-  specificDateFilter,
-  domainFilter,
-  areaFilter,
-  checklists,
-  reports,
-}: PDFGeneratorOptions): Promise<jsPDF> {
+export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
+  const options: PDFGeneratorOptions = data && typeof data === "object" ? data : {};
+  const specificDateFilter = options.specificDateFilter || "";
+  const domainFilter = options.domainFilter || "All";
+  const areaFilter = options.areaFilter || "All";
+  const checklists = Array.isArray(options.checklists) ? options.checklists : [];
+  const reports = Array.isArray(options.reports) ? options.reports : [];
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -68,7 +66,6 @@ export async function generateAuditResumePDF({
       doc.addPage();
       pageNum++;
       y = margin + 8;
-      // Monochrome Page Header
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
@@ -84,13 +81,13 @@ export async function generateAuditResumePDF({
     }
   }
 
-  // --- TOP SOLID BLACK HEADER BAR ---
-  doc.setFillColor(0, 0, 0); // Black
+  // Top Solid Black Header Bar
+  doc.setFillColor(0, 0, 0);
   doc.rect(0, 0, pageWidth, 18, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255); // White
+  doc.setTextColor(255, 255, 255);
   doc.text("LAPORAN AUDIT GANDUL", margin, 12);
 
   y = 26;
@@ -98,7 +95,7 @@ export async function generateAuditResumePDF({
   // Title
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 0, 0); // Black
+  doc.setTextColor(0, 0, 0);
   doc.text("Audit Crucible Resume Report", margin, y);
   y += 7;
 
@@ -108,7 +105,7 @@ export async function generateAuditResumePDF({
   doc.text("Pabrik Manufaktur Sepatu — Evaluasi Live On-Site Execution", margin, y);
   y += 8;
 
-  // Filter Box (Light Grey Box, Neutral Dark Border)
+  // Filter Box
   doc.setFillColor(249, 250, 251);
   doc.setDrawColor(209, 213, 219);
   doc.roundedRect(margin, y, contentWidth, 26, 2, 2, "FD");
@@ -133,15 +130,15 @@ export async function generateAuditResumePDF({
 
   y += 32;
 
-  // --- SECTION 1: RINGKASAN CHECKLIST ---
+  // SECTION 1: RINGKASAN CHECKLIST
   checkNewPage(20);
-  doc.setFillColor(0, 0, 0); // Black Header Box
+  doc.setFillColor(0, 0, 0);
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
 
-  const completedCount = checklists.filter((c) => c.completed).length;
+  const completedCount = checklists.filter((c: any) => c.completed).length;
   const checklistPercent = checklists.length > 0 ? Math.round((completedCount / checklists.length) * 100) : 0;
   doc.text(
     `1. RINGKASAN CHECKLIST AUDIT (${completedCount}/${checklists.length} Selesai - ${checklistPercent}%)`,
@@ -158,10 +155,10 @@ export async function generateAuditResumePDF({
     doc.text("Tidak ada item checklist yang cocok dengan filter aktif.", margin + 2, y);
     y += 8;
   } else {
-    checklists.forEach((item, index) => {
+    checklists.forEach((item: any, index: number) => {
       checkNewPage(18);
 
-      const isCompleted = item.completed;
+      const isCompleted = Boolean(item.completed);
       const statusSymbol = isCompleted ? "[SELESAI]" : "[BELUM]";
 
       doc.setFont("helvetica", "bold");
@@ -171,7 +168,7 @@ export async function generateAuditResumePDF({
 
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
-      const titleLines = doc.splitTextToSize(item.title, contentWidth - 25);
+      const titleLines = doc.splitTextToSize(item.title || "", contentWidth - 25);
       doc.text(titleLines, margin + 22, y);
       y += titleLines.length * 4.2;
 
@@ -179,7 +176,7 @@ export async function generateAuditResumePDF({
       doc.setFontSize(8);
       doc.setTextColor(80, 80, 80);
       const dateTag = item.auditDate ? ` | Tanggal: ${formatIndonesianDate(item.auditDate)}` : "";
-      doc.text(`Target: ${item.month} | Domain: ${item.domain} | Area: ${item.area || "All"}${dateTag}`, margin + 22, y);
+      doc.text(`Target: ${item.month || "All"} | Domain: ${item.domain || "MQAA"} | Area: ${item.area || "All"}${dateTag}`, margin + 22, y);
       y += 4;
 
       if (item.description) {
@@ -195,9 +192,9 @@ export async function generateAuditResumePDF({
 
   y += 4;
 
-  // --- SECTION 2: DAFTAR LAPORAN AUDIT ---
+  // SECTION 2: DAFTAR LAPORAN AUDIT
   checkNewPage(20);
-  doc.setFillColor(0, 0, 0); // Black Header Box
+  doc.setFillColor(0, 0, 0);
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -219,7 +216,6 @@ export async function generateAuditResumePDF({
 
       const indonesianDate = formatIndonesianDate(rep.auditDate);
 
-      // Report Header Box
       doc.setFillColor(249, 250, 251);
       doc.setDrawColor(209, 213, 219);
       doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
@@ -227,27 +223,25 @@ export async function generateAuditResumePDF({
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(0, 0, 0);
-      doc.text(`LAPORAN #${index + 1}: ${rep.title.toUpperCase()}`, margin + 3, y + 5);
+      doc.text(`LAPORAN #${index + 1}: ${String(rep.title || "").toUpperCase()}`, margin + 3, y + 5);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(50, 50, 50);
       doc.text(
-        `Tanggal: ${indonesianDate} | Area: ${rep.area} | Domain: ${rep.domain} | Severity: ${rep.severity} | Status: ${rep.status}`,
+        `Tanggal: ${indonesianDate} | Area: ${rep.area || "-"} | Domain: ${rep.domain || "-"} | Severity: ${rep.severity || "Medium"} | Status: ${rep.status || "Open"}`,
         margin + 3,
         y + 10
       );
 
       y += 18;
 
-      // Auditor
       doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text(`Auditor: ${rep.auditorName}`, margin + 2, y);
+      doc.text(`Auditor: ${rep.auditorName || "Auditor"}`, margin + 2, y);
       y += 5;
 
-      // Deskripsi Temuan
       checkNewPage(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
@@ -256,12 +250,11 @@ export async function generateAuditResumePDF({
 
       doc.setFont("helvetica", "normal");
       doc.setTextColor(30, 30, 30);
-      const findingLines = doc.splitTextToSize(rep.findingDescription, contentWidth - 6);
+      const findingLines = doc.splitTextToSize(rep.findingDescription || "-", contentWidth - 6);
       doc.text(findingLines, margin + 4, y);
       y += findingLines.length * 3.8 + 4;
 
-      // 3 REQUIRED COLUMNS
-      // 1. Root Cause Analysis
+      // 3 Required Columns
       checkNewPage(15);
       doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
@@ -273,11 +266,10 @@ export async function generateAuditResumePDF({
 
       doc.setFont("helvetica", "normal");
       doc.setTextColor(30, 30, 30);
-      const rcLines = doc.splitTextToSize(rep.rootCause, contentWidth - 8);
+      const rcLines = doc.splitTextToSize(rep.rootCause || "-", contentWidth - 8);
       doc.text(rcLines, margin + 6, y);
       y += rcLines.length * 3.8 + 4;
 
-      // 2. Action Plan
       checkNewPage(15);
       doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
@@ -289,11 +281,10 @@ export async function generateAuditResumePDF({
 
       doc.setFont("helvetica", "normal");
       doc.setTextColor(30, 30, 30);
-      const apLines = doc.splitTextToSize(rep.actionPlan, contentWidth - 8);
+      const apLines = doc.splitTextToSize(rep.actionPlan || "-", contentWidth - 8);
       doc.text(apLines, margin + 6, y);
       y += apLines.length * 3.8 + 4;
 
-      // 3. Lesson Learned
       checkNewPage(15);
       doc.setFillColor(243, 244, 246);
       doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
@@ -305,12 +296,12 @@ export async function generateAuditResumePDF({
 
       doc.setFont("helvetica", "normal");
       doc.setTextColor(30, 30, 30);
-      const llLines = doc.splitTextToSize(rep.lessonLearned, contentWidth - 8);
+      const llLines = doc.splitTextToSize(rep.lessonLearned || "-", contentWidth - 8);
       doc.text(llLines, margin + 6, y);
       y += llLines.length * 3.8 + 4;
 
       // Embedded Photos
-      if (rep.photoUrls && rep.photoUrls.length > 0) {
+      if (Array.isArray(rep.photoUrls) && rep.photoUrls.length > 0) {
         checkNewPage(20);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
@@ -318,11 +309,10 @@ export async function generateAuditResumePDF({
         doc.text("Lampiran Foto Temuan Lapangan:", margin + 2, y);
         y += 5;
 
-        const photoWidth = 52; // mm
-        const photoHeight = 38; // mm
-        const gap = 6; // mm
+        const photoWidth = 52;
+        const photoHeight = 38;
+        const gap = 6;
         const maxPerRow = 3;
-        let renderedRows = 0;
 
         for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
           const photoUrl = rep.photoUrls[pIdx];
@@ -332,7 +322,6 @@ export async function generateAuditResumePDF({
             const col = pIdx % maxPerRow;
             if (col === 0 && pIdx > 0) {
               y += photoHeight + 8;
-              renderedRows++;
             }
             checkNewPage(photoHeight + 8);
 
@@ -347,11 +336,9 @@ export async function generateAuditResumePDF({
                 photoWidth,
                 photoHeight
               );
-              // Border
               doc.setDrawColor(200, 200, 200);
               doc.rect(xPos, y, photoWidth, photoHeight);
 
-              // Caption
               doc.setFont("helvetica", "normal");
               doc.setFontSize(7.5);
               doc.setTextColor(80, 80, 80);
@@ -365,14 +352,12 @@ export async function generateAuditResumePDF({
         y += photoHeight + 8;
       }
 
-      // Divider line
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 6;
     }
   }
 
-  // Page Footer for last page
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(100, 100, 100);
@@ -388,7 +373,9 @@ export async function generateAuditResumePDF({
 /**
  * Generates a formal black-and-white (monochrome) PDF for a single specific audit report with embedded photos.
  */
-export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsPDF> {
+export async function generateSingleReportPDF(data: any): Promise<jsPDF> {
+  const rep = data && typeof data === "object" ? data : {};
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -412,7 +399,7 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
       doc.text(
-        `LAPORAN AUDIT GANDUL — ${rep.title.toUpperCase()} (HALAMAN ${pageNum})`,
+        `LAPORAN AUDIT GANDUL — ${String(rep.title || "").toUpperCase()} (HALAMAN ${pageNum})`,
         margin,
         10
       );
@@ -423,13 +410,13 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
     }
   }
 
-  // --- TOP SOLID BLACK HEADER BAR ---
-  doc.setFillColor(0, 0, 0); // Solid Black
+  // Top Solid Black Header Bar
+  doc.setFillColor(0, 0, 0);
   doc.rect(0, 0, pageWidth, 18, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255); // White
+  doc.setTextColor(255, 255, 255);
   doc.text("LAPORAN AUDIT GANDUL", margin, 12);
 
   y = 26;
@@ -437,8 +424,8 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   // Title
   doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 0, 0); // Black
-  const titleLines = doc.splitTextToSize(rep.title, contentWidth);
+  doc.setTextColor(0, 0, 0);
+  const titleLines = doc.splitTextToSize(String(rep.title || "Laporan Audit"), contentWidth);
   doc.text(titleLines, margin, y);
   y += titleLines.length * 6 + 4;
 
@@ -457,11 +444,11 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  doc.text(`• Tanggal Audit : ${indonesianDate} (${rep.auditDate})`, margin + 6, y + 12);
-  doc.text(`• Area Audit    : ${rep.area}`, margin + 6, y + 17);
-  doc.text(`• Domain Audit  : ${rep.domain}`, margin + 95, y + 12);
-  doc.text(`• Severity / Status: ${rep.severity} Severity | ${rep.status}`, margin + 95, y + 17);
-  doc.text(`• Auditor Name  : ${rep.auditorName}`, margin + 6, y + 21);
+  doc.text(`• Tanggal Audit : ${indonesianDate} (${rep.auditDate || "-"})`, margin + 6, y + 12);
+  doc.text(`• Area Audit    : ${rep.area || "-"}`, margin + 6, y + 17);
+  doc.text(`• Domain Audit  : ${rep.domain || "-"}`, margin + 95, y + 12);
+  doc.text(`• Severity / Status: ${rep.severity || "Medium"} Severity | ${rep.status || "Open"}`, margin + 95, y + 17);
+  doc.text(`• Auditor Name  : ${rep.auditorName || "-"}`, margin + 6, y + 21);
 
   y += 30;
 
@@ -476,12 +463,11 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  const findingLines = doc.splitTextToSize(rep.findingDescription, contentWidth);
+  const findingLines = doc.splitTextToSize(rep.findingDescription || "-", contentWidth);
   doc.text(findingLines, margin, y);
   y += findingLines.length * 4 + 6;
 
-  // 3 REQUIRED COLUMNS
-  // 1. Root Cause Analysis
+  // 3 Required Columns
   checkNewPage(20);
   doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
@@ -494,11 +480,10 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  const rcLines = doc.splitTextToSize(rep.rootCause, contentWidth - 4);
+  const rcLines = doc.splitTextToSize(rep.rootCause || "-", contentWidth - 4);
   doc.text(rcLines, margin + 2, y);
   y += rcLines.length * 4 + 8;
 
-  // 2. Action Plan
   checkNewPage(20);
   doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
@@ -511,11 +496,10 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  const apLines = doc.splitTextToSize(rep.actionPlan, contentWidth - 4);
+  const apLines = doc.splitTextToSize(rep.actionPlan || "-", contentWidth - 4);
   doc.text(apLines, margin + 2, y);
   y += apLines.length * 4 + 8;
 
-  // 3. Lesson Learned
   checkNewPage(20);
   doc.setFillColor(243, 244, 246);
   doc.roundedRect(margin, y, contentWidth, 6, 1, 1, "F");
@@ -528,12 +512,12 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  const llLines = doc.splitTextToSize(rep.lessonLearned, contentWidth - 4);
+  const llLines = doc.splitTextToSize(rep.lessonLearned || "-", contentWidth - 4);
   doc.text(llLines, margin + 2, y);
   y += llLines.length * 4 + 8;
 
   // Embedded Photos for Single Report
-  if (rep.photoUrls && rep.photoUrls.length > 0) {
+  if (Array.isArray(rep.photoUrls) && rep.photoUrls.length > 0) {
     checkNewPage(20);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -541,9 +525,9 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
     doc.text("Lampiran Foto Temuan Lapangan:", margin, y);
     y += 6;
 
-    const photoWidth = 52; // mm
-    const photoHeight = 38; // mm
-    const gap = 6; // mm
+    const photoWidth = 52;
+    const photoHeight = 38;
+    const gap = 6;
     const maxPerRow = 3;
 
     for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
@@ -568,11 +552,9 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
             photoWidth,
             photoHeight
           );
-          // Border
           doc.setDrawColor(200, 200, 200);
           doc.rect(xPos, y, photoWidth, photoHeight);
 
-          // Caption
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
           doc.setTextColor(80, 80, 80);
@@ -586,7 +568,6 @@ export async function generateSingleReportPDF(rep: AuditReportItem): Promise<jsP
     y += photoHeight + 8;
   }
 
-  // Page Footer
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(100, 100, 100);

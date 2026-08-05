@@ -1,6 +1,7 @@
+// File: src/components/SummaryDashboard.tsx
 "use client";
 
-import { LayoutDashboard, CheckSquare, FileCheck, AlertTriangle, PieChart, ShieldCheck, Flame, Scissors, Layers, Award } from "lucide-react";
+import { LayoutDashboard, CheckSquare, FileCheck, ShieldCheck, PieChart, Scissors, Layers, Flame, Award, ArrowUpRight, Sparkles, Download } from "lucide-react";
 import { AuditReportItem } from "./AuditReportBuilder";
 import { ChecklistItem } from "./ThreeMonthTimeline";
 import { DomainBadge } from "./DomainBadge";
@@ -44,6 +45,13 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
     CSC: reports.filter((r) => r.area === "CSC").length,
   };
 
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   return (
     <section className="bg-white rounded-3xl p-6 shadow-md border border-[#F7C6D9] space-y-6">
       {/* Header */}
@@ -64,7 +72,7 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
         </div>
       </div>
 
-      {/* 4 Summary Cards */}
+      {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Checklist Progress */}
         <div className="bg-gradient-to-br from-[#6A0DAD] to-[#A569BD] text-white rounded-2xl p-5 shadow-lg space-y-3 relative overflow-hidden">
@@ -200,6 +208,39 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
           </div>
         </div>
       </div>
+
+      {/* Quick Action Buttons */}
+      <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs font-bold text-gray-600">Pintas Navigasi Cepat (Quick Actions):</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => scrollToSection("timeline-section")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F7C6D9]/40 hover:bg-[#F7C6D9]/70 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Lihat Timeline Executions</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => scrollToSection("download-resume-section")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#6A0DAD]/10 hover:bg-[#6A0DAD]/20 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download Resume PDF</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => scrollToSection("report-builder-section")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:opacity-90"
+          >
+            <FileCheck className="w-3.5 h-3.5" />
+            <span>Buat Laporan Baru</span>
+            <ArrowUpRight className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
+
+export default SummaryDashboard;

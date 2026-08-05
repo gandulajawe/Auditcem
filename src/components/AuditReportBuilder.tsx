@@ -50,6 +50,7 @@ export function AuditReportBuilder({
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("All");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Lightbox State
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -181,7 +182,6 @@ export function AuditReportBuilder({
       setFormError("Gagal mengunggah foto.");
     } finally {
       setIsUploading(false);
-      // Reset input value
       e.target.value = "";
     }
   }
@@ -191,6 +191,45 @@ export function AuditReportBuilder({
       ...prev,
       photoUrls: prev.photoUrls.filter((_, idx) => idx !== indexToRemove),
     }));
+  }
+
+  async function handleAiAnalyze() {
+    if (!formData.findingDescription || formData.findingDescription.trim().length < 5) {
+      setFormError("Isi Deskripsi Temuan Lapangan (minimal 5 karakter) terlebih dahulu sebelum menganalisis AI.");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setFormError("");
+
+    try {
+      const res = await fetch("/api/audit/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: formData.findingDescription,
+          area: formData.area,
+          severity: formData.severity,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setFormData((prev) => ({
+          ...prev,
+          rootCause: data.rootCause || prev.rootCause,
+          actionPlan: data.actionPlan || prev.actionPlan,
+        }));
+      } else {
+        setFormError(data.error || "Gagal menganalisis temuan dengan AI.");
+      }
+    } catch (err) {
+      console.error("AI Analysis error:", err);
+      setFormError("Terjadi kesalahan saat menghubungkan ke service AI.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   }
 
   async function handleFormSubmit(e: React.FormEvent) {
@@ -857,11 +896,24 @@ export function AuditReportBuilder({
                 )}
               </div>
 
-              {/* 3 REQUIRED ANALYSIS COLUMNS */}
+              {/* 3 REQUIRED ANALYSIS COLUMNS WITH AI BUTTON */}
               <div className="p-4 bg-[#FAF7FB] border border-[#F2A7C6]/60 rounded-2xl space-y-3">
-                <span className="text-xs font-extrabold text-[#6A0DAD] uppercase tracking-wider block">
-                  3 KOLOM WAJIB ANALISIS AUDIT (REQUIRED AUDIT COLUMNS)
-                </span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F2A7C6]/60 pb-2">
+                  <span className="text-xs font-extrabold text-[#6A0DAD] uppercase tracking-wider block">
+                    3 KOLOM WAJIB ANALISIS AUDIT (REQUIRED AUDIT COLUMNS)
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleAiAnalyze}
+                    disabled={isAnalyzing}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                    title="Otomatis isi Akar Masalah (Root Cause) & Action Plan berdasarkan deskripsi temuan"
+                  >
+                    <Sparkles className="w-4 h-4 text-[#F7C6D9]" />
+                    <span>{isAnalyzing ? "Menganalisis AI..." : "✨ Analisis Action Plan (AI)"}</span>
+                  </button>
+                </div>
 
                 <div className="space-y-3">
                   {/* Column 1: Root Cause */}
@@ -921,7 +973,7 @@ export function AuditReportBuilder({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || isUploading}
+                  disabled={isSubmitting || isUploading || isAnalyzing}
                   className="flex-1 py-3 text-xs font-bold text-white bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] hover:from-[#580B90] rounded-xl shadow-lg cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? "Menyimpan Laporan..." : editingReport ? "Simpan Perubahan Laporan" : "Simpan Laporan Audit"}

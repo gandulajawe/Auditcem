@@ -1,31 +1,45 @@
+// File: src/lib/seedData.ts
 import { db } from "@/db";
-import { appSettings, auditChecklists, weeklyCadence, auditReports } from "@/db/schema";
+import { appSettings, users, auditChecklists, weeklyReports, auditReports } from "@/db/schema";
+import { hashPassword } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 
 export async function ensureInitialData() {
   try {
-    // Check if initial seeding flag is already present in app_settings table
+    // Check if initial seeding flag is already present
     const seededFlag = await db
       .select()
       .from(appSettings)
       .where(eq(appSettings.key, "checklists_seeded"));
 
     if (seededFlag.length > 0 && seededFlag[0].value === "true") {
-      // Data has already been seeded at least once. Do not re-seed even if user deleted all rows.
       return;
     }
 
-    console.log("Seeding initial checklist, cadence, and report data...");
+    console.log("Seeding initial database records...");
 
-    // 1. Seed Checklists
+    // 1. Seed Initial Admin User
+    const existingUsers = await db.select().from(users).where(eq(users.email, "admin@factory.com"));
+    if (existingUsers.length === 0) {
+      const hashedPassword = await hashPassword(process.env.APP_PASSWORD || "crucible2026");
+      await db.insert(users).values({
+        name: "Admin Auditor",
+        email: "admin@factory.com",
+        password: hashedPassword,
+        role: "admin",
+      });
+    }
+
+    // 2. Seed Checklists
     await db.insert(auditChecklists).values([
-      // Agustus (Month 4) - 3 items
+      // Agustus (Month 4)
       {
         month: "Agustus",
         domain: "MQAA",
         title: "Audit Kualitas Material Cutting & Stamping Sole",
-        description: "Inspeksi toleransi dimensi potong komponen upper & sole, kelayakan pusingan die, serta bebas cacat cacat tekstur kulit/sintetis.",
+        description: "Inspeksi toleransi dimensi potong komponen upper & sole, kelayakan pusingan die, serta bebas cacat tekstur kulit/sintetis.",
         area: "Cutting",
+        auditDate: "2026-08-05",
         completed: true,
         orderIndex: 1,
         isCustom: false,
@@ -36,6 +50,7 @@ export async function ensureInitialData() {
         title: "Implementasi 6S Area Cutting & Prep Line",
         description: "Verifikasi pemilahan tool clicker, kerapihan rak material sintetis, kebersihan lantai kerja, serta penetapan standar tempat sampah.",
         area: "Prep",
+        auditDate: "2026-08-10",
         completed: true,
         orderIndex: 2,
         isCustom: false,
@@ -46,18 +61,20 @@ export async function ensureInitialData() {
         title: "Standardisasi Papan Visual & Kanban Output Harian",
         description: "Pemasangan papan status produksi jam-jaman (Hourly Tracking Board) dan penanda visual reject rate di line Prep/Cutting.",
         area: "Cutting",
+        auditDate: "2026-08-15",
         completed: false,
         orderIndex: 3,
         isCustom: false,
       },
 
-      // September (Month 5) - Placeholder / 3 items
+      // September (Month 5)
       {
         month: "September",
         domain: "MQAA",
         title: "Audit Konsistensi Aplikasi Lem Cementing & Primer (CSC)",
         description: "Verifikasi suhu oven aktivasi lem (65-75°C), ketebalan olesan primer pada sole outsole TPU/Phylon, dan tack-free time.",
         area: "CSC",
+        auditDate: "2026-09-02",
         completed: false,
         orderIndex: 1,
         isCustom: false,
@@ -68,6 +85,7 @@ export async function ensureInitialData() {
         title: "Penataan Zonasasi & Housekeeping Line Prep Skiving",
         description: "Pengaturan kode warna lantai untuk jalur trolley material, area penumpukan box upper, dan kebersihan serbuk mesin skiving.",
         area: "Prep",
+        auditDate: "2026-09-12",
         completed: false,
         orderIndex: 2,
         isCustom: false,
@@ -78,18 +96,20 @@ export async function ensureInitialData() {
         title: "Papan Indikator Defect & Matrix Skill Operator",
         description: "Pembaruan matrix kompetensi operator stitching/skiving serta grafik pareto cacat jahitan mingguan di papan area Prep.",
         area: "Prep",
+        auditDate: "2026-09-20",
         completed: false,
         orderIndex: 3,
         isCustom: false,
       },
 
-      // Oktober (Month 6) - 5 items (Full Scope)
+      // Oktober (Month 6)
       {
         month: "Oktober",
         domain: "MQAA",
         title: "MQAA Full Scope Audit - Bonding Strength & Lasting Quality",
         description: "Uji tarik bonding strength sole (minimal 3.5 kg/cm), kelurusan seam upper, ketepatan toe margin, dan kerapihan finishing.",
         area: "CSC",
+        auditDate: "2026-10-05",
         completed: false,
         orderIndex: 1,
         isCustom: false,
@@ -100,6 +120,7 @@ export async function ensureInitialData() {
         title: "Audit Sertifikasi 6S Mandiri All Audit Areas",
         description: "Evaluasi menyeluruh 6 kriteria (Sort, Set, Shine, Standardize, Sustain, Safety) di seluruh sektor Cutting, Prep, dan CSC.",
         area: "All",
+        auditDate: "2026-10-12",
         completed: false,
         orderIndex: 2,
         isCustom: false,
@@ -110,6 +131,7 @@ export async function ensureInitialData() {
         title: "Audit Papan Eskalasi Problem & Live Metrics Display",
         description: "Evaluasi respon manajemen terhadap red-flag pada papan andon dan kelengkapan visual instruksi kerja (WI) di tiap workstation.",
         area: "CSC",
+        auditDate: "2026-10-18",
         completed: false,
         orderIndex: 3,
         isCustom: false,
@@ -120,6 +142,7 @@ export async function ensureInitialData() {
         title: "Audit HSE - Safety Guarding, Exhauster Vent & APD Kimia",
         description: "Pemeriksaan fungsi sensor keselamatan mesin press sole, ketersediaan exhauster di meja lem, dan kedisiplinan respirator operator.",
         area: "CSC",
+        auditDate: "2026-10-22",
         completed: false,
         orderIndex: 4,
         isCustom: false,
@@ -130,14 +153,15 @@ export async function ensureInitialData() {
         title: "Process Standardization Audit - Cycle Time & Work Instructions",
         description: "Auditing Kepatuhan Operator terhadap Standard Operation Sheet (SOS), takt time line assembly, dan metode balancing jalur.",
         area: "Prep",
+        auditDate: "2026-10-28",
         completed: false,
         orderIndex: 5,
         isCustom: false,
       },
     ]);
 
-    // 2. Seed Weekly Cadence
-    await db.insert(weeklyCadence).values([
+    // 3. Seed Weekly Cadence / Reports
+    await db.insert(weeklyReports).values([
       {
         weekNumber: 1,
         title: "Minggu 1: Focus Area Cutting & Prep (MQAA, 6S, VM)",
@@ -172,7 +196,7 @@ export async function ensureInitialData() {
       },
     ]);
 
-    // 3. Seed Audit Reports
+    // 4. Seed Audit Reports
     await db.insert(auditReports).values([
       {
         title: "Fluktuasi Suhu Oven Aktivasi Lem pada Line CSC #2",
@@ -215,13 +239,13 @@ export async function ensureInitialData() {
       },
     ]);
 
-    // 4. Mark seed flag in app_settings
+    // 5. Store seed flag in app_settings
     await db.insert(appSettings).values({
       key: "checklists_seeded",
       value: "true",
     });
 
-    console.log("Seeding initial data complete and flag 'checklists_seeded' stored.");
+    console.log("Seeding initial data complete.");
   } catch (error) {
     console.error("Error in ensureInitialData:", error);
   }
