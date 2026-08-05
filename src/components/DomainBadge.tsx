@@ -25,54 +25,54 @@ export function getDomainConfig(domain: string) {
   const norm = domain.trim().toLowerCase();
   if (norm.includes("mqaa")) {
     return {
-      bg: "bg-purple-100",
-      text: "text-purple-800",
-      border: "border-purple-300",
-      accent: "#6A0DAD",
+      bg: "bg-indigo-50 hover:bg-indigo-100/80",
+      text: "text-indigo-700",
+      border: "border-indigo-200/80",
+      accent: "#4F46E5",
       label: "MQAA (Quality Assurance)",
     };
   }
   if (norm.includes("6s")) {
     return {
-      bg: "bg-pink-100",
-      text: "text-pink-800",
-      border: "border-pink-300",
-      accent: "#F2A7C6",
+      bg: "bg-emerald-50 hover:bg-emerald-100/80",
+      text: "text-emerald-700",
+      border: "border-emerald-200/80",
+      accent: "#10B981",
       label: "6S (Sort-Safety)",
     };
   }
   if (norm.includes("visual") || norm.includes("vm")) {
     return {
-      bg: "bg-indigo-100",
-      text: "text-indigo-800",
-      border: "border-indigo-300",
-      accent: "#A569BD",
+      bg: "bg-purple-50 hover:bg-purple-100/80",
+      text: "text-purple-700",
+      border: "border-purple-200/80",
+      accent: "#9333EA",
       label: "Visual Management",
     };
   }
   if (norm.includes("hse") || norm.includes("k3")) {
     return {
-      bg: "bg-emerald-100",
-      text: "text-emerald-800",
-      border: "border-emerald-300",
-      accent: "#10B981",
+      bg: "bg-amber-50 hover:bg-amber-100/80",
+      text: "text-amber-700",
+      border: "border-amber-200/80",
+      accent: "#F59E0B",
       label: "HSE (Safety & Env)",
     };
   }
   if (norm.includes("ps") || norm.includes("process")) {
     return {
-      bg: "bg-amber-100",
-      text: "text-amber-800",
-      border: "border-amber-300",
-      accent: "#F59E0B",
+      bg: "bg-blue-50 hover:bg-blue-100/80",
+      text: "text-blue-700",
+      border: "border-blue-200/80",
+      accent: "#3B82F6",
       label: "Process Standardization",
     };
   }
   return {
-    bg: "bg-gray-100",
-    text: "text-gray-800",
-    border: "border-gray-300",
-    accent: "#6B7280",
+    bg: "bg-slate-100 hover:bg-slate-200/80",
+    text: "text-slate-700",
+    border: "border-slate-200",
+    accent: "#64748B",
     label: domain,
   };
 }
@@ -82,9 +82,9 @@ export function DomainBadge({ domain, showIcon = true, className = "", size = "m
   const config = getDomainConfig(domain);
 
   const sizeClasses = {
-    sm: "px-2 py-0.5 text-[11px] font-medium gap-1",
-    md: "px-2.5 py-1 text-xs font-semibold gap-1.5",
-    lg: "px-3 py-1.5 text-sm font-bold gap-2",
+    sm: "px-2 py-0.5 text-[11px] font-medium gap-1 rounded-md",
+    md: "px-2.5 py-1 text-xs font-semibold gap-1.5 rounded-lg",
+    lg: "px-3 py-1.5 text-sm font-bold gap-2 rounded-xl",
   };
 
   const iconSizes = {
@@ -95,7 +95,7 @@ export function DomainBadge({ domain, showIcon = true, className = "", size = "m
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border ${config.bg} ${config.text} ${config.border} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center border ${config.bg} ${config.text} ${config.border} ${sizeClasses[size]} transition-all duration-200 shadow-xs hover:shadow-sm ${className}`}
     >
       {showIcon && <Icon className={iconSizes[size]} />}
       <span>{domain}</span>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HeaderHero } from "@/components/HeaderHero";
 import { AuditAreaScope, AreaType } from "@/components/AuditAreaScope";
 import { ThreeMonthTimeline, ChecklistItem } from "@/components/ThreeMonthTimeline";
+import { WeeklyCadenceSection } from "@/components/WeeklyCadenceSection";
 import { AuditReportBuilder, AuditReportItem } from "@/components/AuditReportBuilder";
 import { DownloadResumeSection } from "@/components/DownloadResumeSection";
 import { SummaryDashboard } from "@/components/SummaryDashboard";
@@ -253,21 +254,21 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#FAF7FB] flex flex-col justify-center items-center p-6 space-y-4">
-        <div className="w-12 h-12 border-4 border-[#6A0DAD] border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-extrabold text-[#6A0DAD] tracking-wide animate-pulse">
-          Memuat Dashboard...
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-6 space-y-4">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-extrabold text-indigo-600 tracking-wide animate-pulse">
+          Memuat Dashboard Audit Crucible...
         </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFD] text-gray-800 pb-16 space-y-8">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-16 space-y-8">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#6A0DAD] text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold animate-bounce border border-[#F7C6D9]/40">
-          <CheckCircle2 className="w-4 h-4 text-[#F7C6D9]" />
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold animate-bounce border border-slate-700/50">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -279,14 +280,14 @@ export default function DashboardPage() {
           <button
             onClick={() => loadData(true)}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#F2A7C6] hover:bg-[#F7C6D9]/30 text-[#6A0DAD] text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/80 hover:bg-white text-slate-700 text-xs font-bold rounded-xl shadow-2xs border border-slate-200 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span>{isRefreshing ? "Menyingkronkan Data..." : "Segarkan Data Real-Time"}</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span>{isRefreshing ? "Menyingkronkan..." : "Segarkan Data Real-Time"}</span>
           </button>
         </div>
 
-        {/* SECTION 1: Header / Hero Banner */}
+        {/* SECTION 1: Glassmorphism Header */}
         <HeaderHero
           totalChecklists={totalChecklistCount}
           completedChecklists={completedChecklistCount}
@@ -300,10 +301,10 @@ export default function DashboardPage() {
           reportCounts={reportCounts}
         />
 
-        {/* SECTION 6: Dashboard Ringkasan Summary */}
+        {/* SECTION 3: Dashboard Ringkasan Summary */}
         <SummaryDashboard checklists={checklists} reports={reports} />
 
-        {/* SECTION 3: Timeline 3 Bulan (Agustus, September, Oktober) */}
+        {/* SECTION 4: Timeline 3 Bulan (Agustus, September, Oktober) */}
         <ThreeMonthTimeline
           checklists={checklists}
           selectedAreaFilter={selectedAreaFilter}
@@ -313,13 +314,16 @@ export default function DashboardPage() {
           onDeleteChecklist={handleDeleteChecklist}
         />
 
+        {/* SECTION 5: Dynamic Weekly Audit Cadence (Interactive Editor) */}
+        <WeeklyCadenceSection />
+
         {/* FITUR EKSPOR OTOMATIS PDF: Download Resume (.pdf) Berdasarkan Filter Database */}
         <DownloadResumeSection
           checklists={checklists}
           reports={reports}
         />
 
-        {/* SECTION 5: Audit Report Builder (with 3 Required Columns, Edit, Photo Upload & Single PDF Download) */}
+        {/* SECTION 6: Audit Report Builder (3 Pilar Interactive Cards, Edit, Media Upload & PDF Export) */}
         <AuditReportBuilder
           reports={reports}
           selectedAreaFilter={selectedAreaFilter}
@@ -330,12 +334,12 @@ export default function DashboardPage() {
         />
 
         {/* Footer */}
-        <footer className="pt-8 border-t border-gray-200/80 text-center space-y-2">
-          <p className="text-xs font-bold text-[#6A0DAD]">
-            The Audit Crucible — Months 4-6 Certified Engineering Manager (CEM) Program
+        <footer className="pt-8 border-t border-slate-200/80 text-center space-y-2">
+          <p className="text-xs font-bold text-indigo-600">
+            LL Progress Report — Learning & Development Program
           </p>
-          <p className="text-[11px] text-gray-400">
-            Aplikasi audit milik si Gandul
+          <p className="text-[11px] text-slate-400">
+            Aplikasi audit milik si Gandul • Sesi Aman httpOnly • Drizzle PostgreSQL Persistent DB
           </p>
         </footer>
       </div>
