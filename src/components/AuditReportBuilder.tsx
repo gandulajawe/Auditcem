@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye, Target, GraduationCap, ShieldCheck } from "lucide-react";
+import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye, Target, GraduationCap, ShieldCheck, TrendingUp } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
 import { formatIndonesianDate } from "@/lib/dateUtils";
 import { generateSingleReportPDF } from "@/lib/pdfGenerator";
+import { KaizenPdcaModal } from "./KaizenPdcaModal";
 
 export interface ActionPlanRow {
   horizon: "Jangka Pendek" | "Jangka Panjang";
@@ -34,6 +35,8 @@ export interface AuditReportItem {
   status: string; // 'Open', 'In Progress', 'Resolved'
   auditDate: string; // YYYY-MM-DD
   photoUrls?: string[] | null;
+  isKaizenEscalated?: boolean;
+  kaizen?: any;
   createdAt?: string;
 }
 
@@ -65,6 +68,15 @@ export function AuditReportBuilder({
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Kaizen Modal State
+  const [activeKaizenFinding, setActiveKaizenFinding] = useState<{
+    id: number;
+    title: string;
+    findingDescription: string;
+    aiRootCause?: string | null;
+    area: string;
+  } | null>(null);
+
   // Lightbox State
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -85,6 +97,7 @@ export function AuditReportBuilder({
     status: "Open",
     auditDate: new Date().toISOString().split("T")[0],
     photoUrls: [] as string[],
+    isKaizenEscalated: false,
   });
 
   const [formError, setFormError] = useState("");
@@ -123,6 +136,7 @@ export function AuditReportBuilder({
       status: "Open",
       auditDate: new Date().toISOString().split("T")[0],
       photoUrls: [],
+      isKaizenEscalated: false,
     });
     setFormError("");
     setShowAddModal(true);
@@ -143,6 +157,7 @@ export function AuditReportBuilder({
       status: report.status,
       auditDate: report.auditDate,
       photoUrls: report.photoUrls ? [...report.photoUrls] : [],
+      isKaizenEscalated: Boolean(report.isKaizenEscalated),
     });
     setFormError("");
     setShowAddModal(true);
@@ -289,6 +304,7 @@ export function AuditReportBuilder({
         status: "Open",
         auditDate: new Date().toISOString().split("T")[0],
         photoUrls: [],
+        isKaizenEscalated: false,
       });
       setEditingReport(null);
     } catch (err: unknown) {
@@ -447,6 +463,13 @@ export function AuditReportBuilder({
                         {report.severity} Severity
                       </span>
 
+                      {report.isKaizenEscalated && (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-800 font-black text-[10px] rounded-md border border-purple-200 flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3 text-purple-600" />
+                          Eskalasi Kaizen
+                        </span>
+                      )}
+
                       {report.photoUrls && report.photoUrls.length > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-md border border-slate-200">
                           <ImageIcon className="w-3 h-3 text-indigo-600" />
@@ -506,23 +529,37 @@ export function AuditReportBuilder({
                   </div>
                 </div>
 
-                {/* Expanded View with 3 PILARS INTERACTIVE CARDS */}
+                {/* Expanded View with KAIZEN BUTTON & 3 PILARS */}
                 {isExpanded && (
                   <div className="p-5 bg-slate-50/70 border-t border-slate-100 space-y-4 animate-fadeIn">
                     <div className="flex flex-wrap items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200/80 gap-2">
                       <span className="text-xs font-bold text-indigo-700 flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-indigo-600" /> Tanggal Audit On-Site: <strong>{indonesianDate}</strong>
                       </span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
-                          <UserCheck className="w-4 h-4 text-indigo-600" /> Auditor: <strong>{report.auditorName}</strong>
-                        </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* TOMBOL "BUAT LEMBAR KAIZEN" (TAHUN 2 REQUIREMENT) */}
+                        <button
+                          onClick={() =>
+                            setActiveKaizenFinding({
+                              id: report.id,
+                              title: report.title,
+                              findingDescription: report.findingDescription,
+                              aiRootCause: report.rootCause,
+                              area: report.area,
+                            })
+                          }
+                          className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-extrabold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <TrendingUp className="w-3.5 h-3.5 text-purple-200" />
+                          <span>{report.isKaizenEscalated ? "Kelola Lembar Kaizen" : "Buat Lembar Kaizen"}</span>
+                        </button>
+
                         <button
                           onClick={() => handleDownloadSinglePDF(report)}
                           className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                           <Download className="w-3.5 h-3.5 text-indigo-100" />
-                          <span>Download PDF Laporan</span>
+                          <span>Download PDF</span>
                         </button>
                       </div>
                     </div>
@@ -665,6 +702,22 @@ export function AuditReportBuilder({
           })
         )}
       </div>
+
+      {/* KAIZEN PDCA FORM MODAL */}
+      {activeKaizenFinding && (
+        <KaizenPdcaModal
+          findingId={activeKaizenFinding.id}
+          findingDescription={activeKaizenFinding.findingDescription}
+          aiRootCause={activeKaizenFinding.aiRootCause}
+          area={activeKaizenFinding.area}
+          onClose={() => setActiveKaizenFinding(null)}
+          onSaveSuccess={() => {
+            if (editingReport) {
+              onUpdateReportStatus(activeKaizenFinding.id, "In Progress");
+            }
+          }}
+        />
+      )}
 
       {/* LIGHTBOX MODAL FOR ENLARGING PHOTOS */}
       {lightboxImage && (
@@ -902,6 +955,21 @@ export function AuditReportBuilder({
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Checkbox Eskalasi Kaizen */}
+              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-2xl flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-purple-900">
+                  <input
+                    type="checkbox"
+                    checked={formData.isKaizenEscalated}
+                    onChange={(e) => setFormData({ ...formData, isKaizenEscalated: e.target.checked })}
+                    className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <TrendingUp className="w-4 h-4 text-purple-600" />
+                  <span>Eskalasi Temuan Ini ke Lembar Kaizen 8 Langkah (PDCA)</span>
+                </label>
+                <span className="text-[10px] text-purple-700 font-semibold">Aktifkan untuk integrasi L&D</span>
               </div>
 
               {/* 3 PILARS WAJIB ANALISIS AUDIT WITH AI BUTTON */}

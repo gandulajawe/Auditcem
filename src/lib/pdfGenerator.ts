@@ -1,14 +1,16 @@
 // File: src/lib/pdfGenerator.ts
 import jsPDF from "jspdf";
 import { formatIndonesianDate } from "./dateUtils";
+import { ChecklistItem } from "@/components/ThreeMonthTimeline";
+import { AuditReportItem } from "@/components/AuditReportBuilder";
 
 interface PDFGeneratorOptions {
   timelineFilter?: string;
   specificDateFilter?: string;
   domainFilter?: string;
   areaFilter?: string;
-  checklists?: any[];
-  reports?: any[];
+  checklists?: ChecklistItem[];
+  reports?: AuditReportItem[];
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; format: "JPEG" | "PNG" | "WEBP" } | null> {
@@ -35,9 +37,115 @@ async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; form
   }
 }
 
+async function renderKaizenPdcaPage(doc: jsPDF, kaizen: any, titleStr: string) {
+  doc.addPage();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  // Header Bar
+  doc.setFillColor(0, 0, 0);
+  doc.rect(0, 0, pageWidth, 18, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(255, 255, 255);
+  doc.text("LAPORAN STANDAR OPERASIONAL KAIZEN 8 LANGKAH (PDCA)", margin, 12);
+
+  y = 25;
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text(`LEMBAR KAIZEN: ${titleStr.toUpperCase()}`, margin, y);
+  y += 7;
+
+  // 8 Steps Grid Layout
+  const steps = [
+    { num: "1", title: "Situasi Terkini (Problem Situation)", content: kaizen.problemSituation || "-" },
+    { num: "2", title: "Breakdown Masalah (4H1W)", content: kaizen.breakdown4H1W || "-" },
+    { num: "3", title: "Penetapan Target (Target Setting)", content: kaizen.targetSetting || "-" },
+    { num: "4", title: "Akar Masalah (5-Why & Fishbone)", content: kaizen.rootCause5Why || kaizen.fishboneData || "-" },
+    { num: "5", title: "Rencana Penanggulangan (Countermeasures)", content: kaizen.actionPlan || "-" },
+    { num: "6-7", title: "Evaluasi Hasil & Dampak Perbaikan", content: kaizen.evaluationResults || "-" },
+    { num: "8", title: "Standardisasi & SOP", content: kaizen.standardizationSOP || "-" },
+  ];
+
+  for (const step of steps) {
+    if (y + 18 > pageHeight - 20) {
+      doc.addPage();
+      y = margin + 10;
+    }
+
+    doc.setFillColor(243, 244, 246);
+    doc.roundedRect(margin, y, contentWidth, 5, 1, 1, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Langkah ${step.num}: ${step.title}`, margin + 3, y + 3.5);
+    y += 7;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(30, 30, 30);
+    const lines = doc.splitTextToSize(step.content, contentWidth - 4);
+    doc.text(lines, margin + 2, y);
+    y += lines.length * 3.8 + 4;
+  }
+
+  // Before - After Photos
+  if (kaizen.beforePhotoUrl || kaizen.afterPhotoUrl) {
+    if (y + 45 > pageHeight - 20) {
+      doc.addPage();
+      y = margin + 10;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.text("DOKUMENTASI BEFORE - AFTER (SEBELUM vs SESUDAH KAIZEN):", margin, y);
+    y += 6;
+
+    const photoWidth = 70;
+    const photoHeight = 45;
+
+    if (kaizen.beforePhotoUrl) {
+      const beforeImg = await fetchImageAsDataUrl(kaizen.beforePhotoUrl);
+      if (beforeImg) {
+        try {
+          doc.addImage(beforeImg.dataUrl, beforeImg.format, margin, y, photoWidth, photoHeight);
+          doc.setDrawColor(200, 200, 200);
+          doc.rect(margin, y, photoWidth, photoHeight);
+          doc.setFontSize(7.5);
+          doc.text("BEFORE (Sebelum Perbaikan)", margin, y + photoHeight + 4);
+        } catch (e) {
+          console.error("Error drawing Before photo in PDF:", e);
+        }
+      }
+    }
+
+    if (kaizen.afterPhotoUrl) {
+      const afterImg = await fetchImageAsDataUrl(kaizen.afterPhotoUrl);
+      if (afterImg) {
+        try {
+          const xPos = margin + photoWidth + 10;
+          doc.addImage(afterImg.dataUrl, afterImg.format, xPos, y, photoWidth, photoHeight);
+          doc.setDrawColor(200, 200, 200);
+          doc.rect(xPos, y, photoWidth, photoHeight);
+          doc.setFontSize(7.5);
+          doc.text("AFTER (Sesudah Perbaikan)", xPos, y + photoHeight + 4);
+        } catch (e) {
+          console.error("Error drawing After photo in PDF:", e);
+        }
+      }
+    }
+
+    y += photoHeight + 8;
+  }
+}
+
 /**
  * Generates formal black-and-white (monochrome) PDF for audit resumes.
- * Returns jsPDF instance which supports .output("arraybuffer"), .output("uint8array"), and .save(filename).
  */
 export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
   const options: PDFGeneratorOptions = data && typeof data === "object" ? data : {};
@@ -81,7 +189,7 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
     }
   }
 
-  // Top Solid Black Header Bar
+  // --- TOP SOLID BLACK HEADER BAR ---
   doc.setFillColor(0, 0, 0);
   doc.rect(0, 0, pageWidth, 18, "F");
 
@@ -92,7 +200,6 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
 
   y = 26;
 
-  // Title
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
@@ -105,7 +212,6 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
   doc.text("Pabrik Manufaktur Sepatu — Evaluasi Live On-Site Execution", margin, y);
   y += 8;
 
-  // Filter Box
   doc.setFillColor(249, 250, 251);
   doc.setDrawColor(209, 213, 219);
   doc.roundedRect(margin, y, contentWidth, 26, 2, 2, "FD");
@@ -130,7 +236,7 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
 
   y += 32;
 
-  // SECTION 1: RINGKASAN CHECKLIST
+  // --- SECTION 1: RINGKASAN CHECKLIST ---
   checkNewPage(20);
   doc.setFillColor(0, 0, 0);
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
@@ -192,7 +298,7 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
 
   y += 4;
 
-  // SECTION 2: DAFTAR LAPORAN AUDIT
+  // --- SECTION 2: DAFTAR LAPORAN AUDIT ---
   checkNewPage(20);
   doc.setFillColor(0, 0, 0);
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
@@ -352,6 +458,11 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
         y += photoHeight + 8;
       }
 
+      // If Kaizen PDCA Data exists, append Kaizen PDCA 8-Step Sheet Page
+      if ((rep as any).kaizen) {
+        await renderKaizenPdcaPage(doc, (rep as any).kaizen, rep.title || "Laporan Audit");
+      }
+
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 6;
@@ -371,7 +482,7 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
 }
 
 /**
- * Generates a formal black-and-white (monochrome) PDF for a single specific audit report with embedded photos.
+ * Generates a formal black-and-white (monochrome) PDF for a single specific audit report with embedded photos and optional Kaizen 8-Step Sheet page.
  */
 export async function generateSingleReportPDF(data: any): Promise<jsPDF> {
   const rep = data && typeof data === "object" ? data : {};
@@ -566,6 +677,11 @@ export async function generateSingleReportPDF(data: any): Promise<jsPDF> {
     }
 
     y += photoHeight + 8;
+  }
+
+  // If Kaizen PDCA Data exists, append Kaizen PDCA 8-Step Sheet Page
+  if (rep.kaizen) {
+    await renderKaizenPdcaPage(doc, rep.kaizen, rep.title || "Laporan Audit");
   }
 
   doc.setFontSize(8);
