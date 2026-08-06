@@ -1,10 +1,24 @@
 // File: src/components/SummaryDashboard.tsx
 "use client";
 
-import { LayoutDashboard, CheckSquare, FileCheck, ShieldCheck, PieChart, Scissors, Layers, Flame, Award, ArrowUpRight, Sparkles, Download } from "lucide-react";
+import React from "react";
+import {
+  LayoutDashboard,
+  CheckSquare,
+  FileCheck,
+  ShieldCheck,
+  PieChart,
+  Award,
+  ArrowUpRight,
+  Sparkles,
+  Download,
+} from "lucide-react";
 import { AuditReportItem } from "./AuditReportBuilder";
 import { ChecklistItem } from "./ThreeMonthTimeline";
 import { DomainBadge } from "./DomainBadge";
+import { generatePivotData, DEFAULT_MONTHS } from "@/lib/pivotUtils";
+import { PivotTable } from "./PivotTable";
+import { PivotChart } from "./PivotChart";
 
 interface SummaryDashboardProps {
   checklists: ChecklistItem[];
@@ -38,12 +52,8 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
     }
   });
 
-  // Area Breakdown Stats
-  const areaStats = {
-    Cutting: reports.filter((r) => r.area === "Cutting").length,
-    Prep: reports.filter((r) => r.area === "Prep").length,
-    CSC: reports.filter((r) => r.area === "CSC").length,
-  };
+  // Transform raw findings into Pivot Matrix (Rows, Totals, Chart Data)
+  const pivotMatrix = generatePivotData(reports, DEFAULT_MONTHS);
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -53,20 +63,20 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
   };
 
   return (
-    <section className="bg-white rounded-3xl p-6 shadow-md border border-[#F7C6D9] space-y-6">
+    <section id="dashboard-pdf-content" className="bg-white/90 backdrop-blur-md rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/80 space-y-6 transition-all hover:shadow-md">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
         <div>
-          <span className="text-xs font-bold text-[#A569BD] tracking-wider uppercase">
-            Ringkasan Eksekutif
+          <span className="text-xs font-bold text-[#6A0DAD] tracking-wider uppercase block">
+            Executive Analytics & Pivot Matrix
           </span>
-          <h2 className="text-2xl font-black text-[#6A0DAD] flex items-center gap-2">
-            <LayoutDashboard className="w-6 h-6 text-[#A569BD]" />
-            Dashboard Ringkasan Audit
+          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <LayoutDashboard className="w-6 h-6 text-[#6A0DAD]" />
+            Dashboard Analitik & Matriks Pivot Audit
           </h2>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-bold text-[#6A0DAD] bg-[#F7C6D9]/40 px-3.5 py-1.5 rounded-full border border-[#F2A7C6]/60">
+        <div className="flex items-center gap-2 text-xs font-bold text-[#6A0DAD] bg-[#F3EAF8] px-3.5 py-1.5 rounded-full border border-[#A569BD]/30">
           <Award className="w-4 h-4 text-[#6A0DAD]" />
           <span>CEM Audit Metric Performance</span>
         </div>
@@ -75,7 +85,7 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Checklist Progress */}
-        <div className="bg-gradient-to-br from-[#6A0DAD] to-[#A569BD] text-white rounded-2xl p-5 shadow-lg space-y-3 relative overflow-hidden">
+        <div className="bg-gradient-to-br from-[#6A0DAD] to-[#A569BD] text-white rounded-2xl p-5 shadow-sm space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-purple-100 uppercase tracking-wider">
               Total Checklist Selesai
@@ -102,30 +112,30 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
         </div>
 
         {/* Card 2: Total Audit Reports */}
-        <div className="bg-white border-2 border-[#F7C6D9] rounded-2xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Laporan Audit
             </span>
-            <div className="p-2 bg-[#F7C6D9] text-[#6A0DAD] rounded-xl">
+            <div className="p-2 bg-[#F3EAF8] text-[#6A0DAD] rounded-xl border border-[#A569BD]/20">
               <FileCheck className="w-5 h-5" />
             </div>
           </div>
           <div>
-            <span className="text-3xl font-black text-gray-900">{totalReports}</span>
-            <p className="text-xs text-gray-500 font-medium mt-1">
-              Laporan terdaftar dengan 3-Column Analysis
+            <span className="text-3xl font-black text-slate-900">{totalReports}</span>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Laporan terdaftar dengan 3 Pilar CAPA Analysis
             </p>
           </div>
         </div>
 
         {/* Card 3: Top Domain with Most Findings */}
-        <div className="bg-white border-2 border-[#F7C6D9] rounded-2xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Domain Paling Sering Temuan
             </span>
-            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">
+            <div className="p-2 bg-amber-50 text-amber-700 rounded-xl border border-amber-100">
               <PieChart className="w-5 h-5" />
             </div>
           </div>
@@ -133,19 +143,19 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
             <div className="flex items-center gap-2">
               <DomainBadge domain={topDomain} size="md" />
             </div>
-            <p className="text-xs text-gray-500 font-medium mt-2">
+            <p className="text-xs text-slate-500 font-medium mt-2">
               <strong>{topDomainCount} temuan</strong> tercatat pada domain ini.
             </p>
           </div>
         </div>
 
         {/* Card 4: Open vs Resolved Status Ratio */}
-        <div className="bg-white border-2 border-[#F7C6D9] rounded-2xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Status Perbaikan (Fix Ratio)
             </span>
-            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+            <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
               <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
@@ -154,86 +164,56 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
               <span className="text-2xl font-black text-emerald-600">{resolvedReports} Selesai</span>
               <span className="text-xs text-rose-500 font-bold">{openReports} Open</span>
             </div>
-            <p className="text-xs text-gray-500 font-medium mt-1">
+            <p className="text-xs text-slate-500 font-medium mt-1">
               {inProgressReports} laporan dalam proses tindakan.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Area Breakdown Cards */}
-      <div className="bg-[#FAF7FB] rounded-2xl p-5 border border-[#F2A7C6]/40 space-y-3">
-        <h3 className="text-xs font-bold text-[#6A0DAD] uppercase tracking-wider">
-          Distribusi Temuan Per Area Pabrik Sepatu
-        </h3>
+      {/* PIVOT MATRIX SECTION (PIVOT TABLE & PIVOT STACKED CHART) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+        {/* PIVOT TABLE */}
+        <PivotTable
+          rows={pivotMatrix.rows}
+          totals={pivotMatrix.totals}
+          months={pivotMatrix.months}
+          isEmpty={pivotMatrix.isEmpty}
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#6A0DAD] text-white rounded-xl">
-                <Scissors className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900 text-sm">Cutting Area</h4>
-                <p className="text-[11px] text-gray-500 font-medium">Upper Cutting & Die Stamping</p>
-              </div>
-            </div>
-            <span className="text-xl font-black text-[#6A0DAD]">{areaStats.Cutting}</span>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#A569BD] text-white rounded-xl">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900 text-sm">Prep Area</h4>
-                <p className="text-[11px] text-gray-500 font-medium">Skiving, Slating & Stitching</p>
-              </div>
-            </div>
-            <span className="text-xl font-black text-[#A569BD]">{areaStats.Prep}</span>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#E082A8] text-white rounded-xl">
-                <Flame className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-900 text-sm">CSC Area</h4>
-                <p className="text-[11px] text-gray-500 font-medium">Cold Cement Sole & Assembly</p>
-              </div>
-            </div>
-            <span className="text-xl font-black text-[#E082A8]">{areaStats.CSC}</span>
-          </div>
-        </div>
+        {/* PIVOT STACKED BAR CHART */}
+        <PivotChart
+          data={pivotMatrix.chartData}
+          months={pivotMatrix.months}
+          isEmpty={pivotMatrix.isEmpty}
+        />
       </div>
 
       {/* Quick Action Buttons */}
-      <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-bold text-gray-600">Pintas Navigasi Cepat (Quick Actions):</span>
+      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs font-bold text-slate-600">Pintas Navigasi Cepat (Quick Actions):</span>
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => scrollToSection("timeline-section")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F7C6D9]/40 hover:bg-[#F7C6D9]/70 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F3EAF8] hover:bg-[#A569BD]/20 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer border border-[#A569BD]/30"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 text-[#6A0DAD]" />
             <span>Lihat Timeline Executions</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
           <button
             onClick={() => scrollToSection("download-resume-section")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#6A0DAD]/10 hover:bg-[#6A0DAD]/20 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F3EAF8] hover:bg-[#A569BD]/20 text-[#6A0DAD] text-xs font-bold rounded-xl transition-all cursor-pointer border border-[#A569BD]/30"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 text-[#6A0DAD]" />
             <span>Download Resume PDF</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
           <button
             onClick={() => scrollToSection("report-builder-section")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:opacity-90"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-[#6A0DAD] to-[#A569BD] text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer hover:opacity-90"
           >
-            <FileCheck className="w-3.5 h-3.5" />
+            <FileCheck className="w-3.5 h-3.5 text-purple-200" />
             <span>Buat Laporan Baru</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
