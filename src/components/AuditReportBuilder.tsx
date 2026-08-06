@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye, Target, GraduationCap, ShieldCheck, TrendingUp } from "lucide-react";
+import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye, Target, GraduationCap, ShieldCheck, TrendingUp, Hash, Layers } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
 import { formatIndonesianDate } from "@/lib/dateUtils";
@@ -24,7 +24,8 @@ export interface AuditAnalysisResult {
 export interface AuditReportItem {
   id: number;
   title: string;
-  area: string; // 'Cutting', 'Prep', 'CSC'
+  area: string; // Strictly 'Cutting', 'Prep', 'CSC'
+  lineNumber?: string | null; // Optional 'Line 02, Mesin Clicker #4'
   domain: string; // 'MQAA', '6S', 'Visual Management', 'HSE', 'PS'
   findingDescription: string;
   rootCause: string; // Required column 1
@@ -38,6 +39,17 @@ export interface AuditReportItem {
   isKaizenEscalated?: boolean;
   kaizen?: any;
   createdAt?: string;
+}
+
+interface SingleFindingFormField {
+  id: string;
+  title: string;
+  findingDescription: string;
+  rootCause: string;
+  actionPlan: string;
+  lessonLearned: string;
+  isKaizenEscalated: boolean;
+  photoUrls: string[];
 }
 
 interface AuditReportBuilderProps {
@@ -66,7 +78,7 @@ export function AuditReportBuilder({
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("All");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingFindingId, setAnalyzingFindingId] = useState<string | null>(null);
 
   // Kaizen Modal State
   const [activeKaizenFinding, setActiveKaizenFinding] = useState<{
@@ -83,26 +95,34 @@ export function AuditReportBuilder({
   // Success Modal State for single report PDF download
   const [savedReportSuccess, setSavedReportSuccess] = useState<AuditReportItem | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    title: "",
-    area: "Cutting",
+  // Form Header State
+  const [formHeader, setFormHeader] = useState({
+    area: "Cutting", // STRICTLY 3 AREAS: Cutting, Prep, CSC
+    lineNumber: "",
     domain: "MQAA",
-    findingDescription: "",
-    rootCause: "",
-    actionPlan: "",
-    lessonLearned: "",
     auditorName: "Expert Auditor CEM",
     severity: "Medium",
     status: "Open",
     auditDate: new Date().toISOString().split("T")[0],
-    photoUrls: [] as string[],
-    isKaizenEscalated: false,
   });
+
+  // Dynamic Findings Array in Form Modal (Supports Multi-Finding Submission in Single Session)
+  const [formFindings, setFormFindings] = useState<SingleFindingFormField[]>([
+    {
+      id: "f-1",
+      title: "",
+      findingDescription: "",
+      rootCause: "",
+      actionPlan: "",
+      lessonLearned: "",
+      isKaizenEscalated: false,
+      photoUrls: [],
+    },
+  ]);
 
   const [formError, setFormError] = useState("");
 
-  // Filtered reports
+  // Filtered reports (Area strictly Cutting, Prep, CSC or All)
   const filteredReports = reports.filter((r) => {
     if (selectedAreaFilter !== "All" && r.area !== selectedAreaFilter) return false;
     if (selectedDomainFilter !== "All" && r.domain !== selectedDomainFilter) return false;
@@ -111,6 +131,7 @@ export function AuditReportBuilder({
       const q = searchQuery.toLowerCase();
       const match =
         r.title.toLowerCase().includes(q) ||
+        (r.lineNumber && r.lineNumber.toLowerCase().includes(q)) ||
         r.findingDescription.toLowerCase().includes(q) ||
         r.rootCause.toLowerCase().includes(q) ||
         r.actionPlan.toLowerCase().includes(q) ||
@@ -123,52 +144,95 @@ export function AuditReportBuilder({
 
   function openCreateModal() {
     setEditingReport(null);
-    setFormData({
-      title: "",
+    setFormHeader({
       area: "Cutting",
+      lineNumber: "",
       domain: "MQAA",
-      findingDescription: "",
-      rootCause: "",
-      actionPlan: "",
-      lessonLearned: "",
       auditorName: "Expert Auditor CEM",
       severity: "Medium",
       status: "Open",
       auditDate: new Date().toISOString().split("T")[0],
-      photoUrls: [],
-      isKaizenEscalated: false,
     });
+    setFormFindings([
+      {
+        id: `f-${Date.now()}`,
+        title: "",
+        findingDescription: "",
+        rootCause: "",
+        actionPlan: "",
+        lessonLearned: "",
+        isKaizenEscalated: false,
+        photoUrls: [],
+      },
+    ]);
     setFormError("");
     setShowAddModal(true);
   }
 
   function openEditModal(report: AuditReportItem) {
     setEditingReport(report);
-    setFormData({
-      title: report.title,
-      area: report.area,
-      domain: report.domain,
-      findingDescription: report.findingDescription,
-      rootCause: report.rootCause,
-      actionPlan: report.actionPlan,
-      lessonLearned: report.lessonLearned,
-      auditorName: report.auditorName,
-      severity: report.severity,
-      status: report.status,
-      auditDate: report.auditDate,
-      photoUrls: report.photoUrls ? [...report.photoUrls] : [],
-      isKaizenEscalated: Boolean(report.isKaizenEscalated),
+    setFormHeader({
+      area: report.area || "Cutting",
+      lineNumber: report.lineNumber || "",
+      domain: report.domain || "MQAA",
+      auditorName: report.auditorName || "Expert Auditor CEM",
+      severity: report.severity || "Medium",
+      status: report.status || "Open",
+      auditDate: report.auditDate || new Date().toISOString().split("T")[0],
     });
+    setFormFindings([
+      {
+        id: `f-${report.id}`,
+        title: report.title,
+        findingDescription: report.findingDescription,
+        rootCause: report.rootCause,
+        actionPlan: report.actionPlan,
+        lessonLearned: report.lessonLearned,
+        isKaizenEscalated: Boolean(report.isKaizenEscalated),
+        photoUrls: report.photoUrls ? [...report.photoUrls] : [],
+      },
+    ]);
     setFormError("");
     setShowAddModal(true);
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // Add another finding row in creation form
+  function handleAddAnotherFinding() {
+    setFormFindings((prev) => [
+      ...prev,
+      {
+        id: `f-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        title: "",
+        findingDescription: "",
+        rootCause: "",
+        actionPlan: "",
+        lessonLearned: "",
+        isKaizenEscalated: false,
+        photoUrls: [],
+      },
+    ]);
+  }
+
+  function handleRemoveFindingRow(id: string) {
+    if (formFindings.length <= 1) return;
+    setFormFindings((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function handleFindingFieldChange(id: string, field: keyof SingleFindingFormField, value: any) {
+    setFormFindings((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, [field]: value } : f))
+    );
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>, findingId: string) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (formData.photoUrls.length + files.length > 5) {
-      setFormError("Maksimal 5 foto per laporan.");
+    const targetFinding = formFindings.find((f) => f.id === findingId);
+    if (!targetFinding) return;
+
+    if (targetFinding.photoUrls.length + files.length > 5) {
+      setFormError("Maksimal 5 foto per temuan.");
       return;
     }
 
@@ -199,10 +263,13 @@ export function AuditReportBuilder({
       }
 
       if (uploadedUrls.length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          photoUrls: [...prev.photoUrls, ...uploadedUrls].slice(0, 5),
-        }));
+        setFormFindings((prev) =>
+          prev.map((f) =>
+            f.id === findingId
+              ? { ...f, photoUrls: [...f.photoUrls, ...uploadedUrls].slice(0, 5) }
+              : f
+          )
+        );
       }
     } catch (err) {
       console.error("Upload error:", err);
@@ -213,20 +280,24 @@ export function AuditReportBuilder({
     }
   }
 
-  function handleRemovePhoto(indexToRemove: number) {
-    setFormData((prev) => ({
-      ...prev,
-      photoUrls: prev.photoUrls.filter((_, idx) => idx !== indexToRemove),
-    }));
+  function handleRemovePhoto(findingId: string, photoIndex: number) {
+    setFormFindings((prev) =>
+      prev.map((f) =>
+        f.id === findingId
+          ? { ...f, photoUrls: f.photoUrls.filter((_, idx) => idx !== photoIndex) }
+          : f
+      )
+    );
   }
 
-  async function handleAiAnalyze() {
-    if (!formData.findingDescription || formData.findingDescription.trim().length < 5) {
+  async function handleAiAnalyzeFinding(findingId: string) {
+    const finding = formFindings.find((f) => f.id === findingId);
+    if (!finding || !finding.findingDescription || finding.findingDescription.trim().length < 5) {
       setFormError("Isi Deskripsi Temuan Lapangan (minimal 5 karakter) terlebih dahulu sebelum menganalisis AI.");
       return;
     }
 
-    setIsAnalyzing(true);
+    setAnalyzingFindingId(findingId);
     setFormError("");
 
     try {
@@ -234,21 +305,27 @@ export function AuditReportBuilder({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description: formData.findingDescription,
-          area: formData.area,
-          domain: formData.domain,
-          severity: formData.severity,
+          description: finding.findingDescription,
+          area: formHeader.area,
+          domain: formHeader.domain,
+          severity: formHeader.severity,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setFormData((prev) => ({
-          ...prev,
-          rootCause: data.rootCause || data.summary || prev.rootCause,
-          actionPlan: data.actionPlan || prev.actionPlan,
-        }));
+        setFormFindings((prev) =>
+          prev.map((f) =>
+            f.id === findingId
+              ? {
+                  ...f,
+                  rootCause: data.rootCause || data.summary || f.rootCause,
+                  actionPlan: data.actionPlan || f.actionPlan,
+                }
+              : f
+          )
+        );
       } else {
         setFormError(data.error || "Gagal menganalisis temuan dengan AI.");
       }
@@ -256,7 +333,7 @@ export function AuditReportBuilder({
       console.error("AI Analysis error:", err);
       setFormError("Terjadi kesalahan saat menghubungkan ke service AI.");
     } finally {
-      setIsAnalyzing(false);
+      setAnalyzingFindingId(null);
     }
   }
 
@@ -264,48 +341,83 @@ export function AuditReportBuilder({
     e.preventDefault();
     setFormError("");
 
-    if (!formData.title.trim() || !formData.findingDescription.trim()) {
-      setFormError("Judul dan Deskripsi Temuan wajib diisi.");
-      return;
-    }
-
-    if (!formData.rootCause.trim() || !formData.actionPlan.trim() || !formData.lessonLearned.trim()) {
-      setFormError("3 Kolom Wajib Analysis (Root Cause, Action Plan, & Lesson Learned) harus diisi dengan lengkap.");
-      return;
+    // Validate findings
+    for (let i = 0; i < formFindings.length; i++) {
+      const f = formFindings[i];
+      const num = i + 1;
+      if (!f.title.trim() && !f.findingDescription.trim()) {
+        setFormError(`Temuan #${num}: Judul atau deskripsi temuan wajib diisi.`);
+        return;
+      }
+      if (!f.rootCause.trim() || !f.actionPlan.trim() || !f.lessonLearned.trim()) {
+        setFormError(`Temuan #${num}: 3 Kolom Wajib Analysis (Root Cause, Action Plan, & Lesson Learned) harus diisi.`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
       if (editingReport) {
-        await onUpdateReport(editingReport.id, { ...formData });
-        setShowAddModal(false);
-        setSavedReportSuccess({ id: editingReport.id, ...formData });
-      } else {
-        const createdReport = await onAddReport({ ...formData });
-        setShowAddModal(false);
+        // Single report update
+        const singleFinding = formFindings[0];
+        const updatePayload = {
+          title: singleFinding.title || `Temuan Audit ${formHeader.area}`,
+          area: formHeader.area,
+          lineNumber: formHeader.lineNumber,
+          domain: formHeader.domain,
+          findingDescription: singleFinding.findingDescription,
+          rootCause: singleFinding.rootCause,
+          actionPlan: singleFinding.actionPlan,
+          lessonLearned: singleFinding.lessonLearned,
+          auditorName: formHeader.auditorName,
+          severity: formHeader.severity,
+          status: formHeader.status,
+          auditDate: formHeader.auditDate,
+          isKaizenEscalated: singleFinding.isKaizenEscalated,
+          photoUrls: singleFinding.photoUrls,
+        };
 
-        if (createdReport) {
-          setSavedReportSuccess(createdReport);
+        await onUpdateReport(editingReport.id, updatePayload);
+        setShowAddModal(false);
+        setSavedReportSuccess({ id: editingReport.id, ...updatePayload });
+      } else {
+        // Multi-finding batch submission or single submission
+        const res = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            area: formHeader.area,
+            lineNumber: formHeader.lineNumber,
+            domain: formHeader.domain,
+            auditorName: formHeader.auditorName,
+            severity: formHeader.severity,
+            status: formHeader.status,
+            auditDate: formHeader.auditDate,
+            findings: formFindings.map((f) => ({
+              title: f.title || `Temuan Audit ${formHeader.area} ${formHeader.lineNumber ? `(${formHeader.lineNumber})` : ""}`,
+              findingDescription: f.findingDescription,
+              rootCause: f.rootCause,
+              actionPlan: f.actionPlan,
+              lessonLearned: f.lessonLearned,
+              isKaizenEscalated: f.isKaizenEscalated,
+              photoUrls: f.photoUrls,
+            })),
+          }),
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          setShowAddModal(false);
+          if (json.data) {
+            setSavedReportSuccess(json.data);
+          }
+          // Refresh window / data
+          window.location.reload();
         } else {
-          setSavedReportSuccess({ id: Date.now(), ...formData });
+          setFormError(json.error || "Gagal menyimpan laporan.");
         }
       }
 
-      setFormData({
-        title: "",
-        area: "Cutting",
-        domain: "MQAA",
-        findingDescription: "",
-        rootCause: "",
-        actionPlan: "",
-        lessonLearned: "",
-        auditorName: "Expert Auditor CEM",
-        severity: "Medium",
-        status: "Open",
-        auditDate: new Date().toISOString().split("T")[0],
-        photoUrls: [],
-        isKaizenEscalated: false,
-      });
       setEditingReport(null);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Gagal menyimpan laporan.");
@@ -385,7 +497,7 @@ export function AuditReportBuilder({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari kata kunci temuan, root cause, auditor..."
+              placeholder="Cari kata kunci temuan, line mesin, root cause, auditor..."
               className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 transition-all text-slate-800"
             />
           </div>
@@ -455,9 +567,19 @@ export function AuditReportBuilder({
                 >
                   <div className="space-y-1.5 flex-1 min-w-[280px]">
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Area Tag */}
                       <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 font-black text-xs rounded-md border border-indigo-100 shadow-2xs">
                         AREA: {report.area}
                       </span>
+
+                      {/* Line Number Tag */}
+                      {report.lineNumber && (
+                        <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-md border border-slate-200 flex items-center gap-1">
+                          <Hash className="w-3 h-3 text-indigo-600" />
+                          {report.lineNumber}
+                        </span>
+                      )}
+
                       <DomainBadge domain={report.domain} size="sm" />
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getSeverityBadge(report.severity)}`}>
                         {report.severity} Severity
@@ -529,15 +651,17 @@ export function AuditReportBuilder({
                   </div>
                 </div>
 
-                {/* Expanded View with KAIZEN BUTTON & 3 PILARS */}
+                {/* Expanded View */}
                 {isExpanded && (
                   <div className="p-5 bg-slate-50/70 border-t border-slate-100 space-y-4 animate-fadeIn">
                     <div className="flex flex-wrap items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200/80 gap-2">
                       <span className="text-xs font-bold text-indigo-700 flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-indigo-600" /> Tanggal Audit On-Site: <strong>{indonesianDate}</strong>
+                        {report.lineNumber && (
+                          <span className="text-slate-500 ml-2">({report.lineNumber})</span>
+                        )}
                       </span>
                       <div className="flex items-center gap-2 flex-wrap">
-                        {/* TOMBOL "BUAT LEMBAR KAIZEN" (TAHUN 2 REQUIREMENT) */}
                         <button
                           onClick={() =>
                             setActiveKaizenFinding({
@@ -712,9 +836,7 @@ export function AuditReportBuilder({
           area={activeKaizenFinding.area}
           onClose={() => setActiveKaizenFinding(null)}
           onSaveSuccess={() => {
-            if (editingReport) {
-              onUpdateReportStatus(activeKaizenFinding.id, "In Progress");
-            }
+            onUpdateReportStatus(activeKaizenFinding.id, "In Progress");
           }}
         />
       )}
@@ -758,12 +880,9 @@ export function AuditReportBuilder({
 
             <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs text-left space-y-1">
               <p className="font-bold text-slate-800">Detail Ringkas Laporan:</p>
-              <p className="text-slate-600">• Area: {savedReportSuccess.area} | Domain: {savedReportSuccess.domain}</p>
+              <p className="text-slate-600">• Area: {savedReportSuccess.area} {savedReportSuccess.lineNumber ? `(${savedReportSuccess.lineNumber})` : ""} | Domain: {savedReportSuccess.domain}</p>
               <p className="text-slate-600">• Tanggal: {formatIndonesianDate(savedReportSuccess.auditDate)}</p>
               <p className="text-slate-600">• Auditor: {savedReportSuccess.auditorName}</p>
-              {savedReportSuccess.photoUrls && savedReportSuccess.photoUrls.length > 0 && (
-                <p className="text-slate-600">• Lampiran Foto: {savedReportSuccess.photoUrls.length} File</p>
-              )}
             </div>
 
             <div className="flex flex-col gap-2 pt-2">
@@ -786,7 +905,7 @@ export function AuditReportBuilder({
         </div>
       )}
 
-      {/* CREATE & EDIT REPORT MODAL */}
+      {/* CREATE & EDIT REPORT MODAL WITH MULTI-FINDING INPUT SUPPORT */}
       {showFormModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -797,7 +916,7 @@ export function AuditReportBuilder({
                   {editingReport ? "Edit Laporan Audit On-Site" : "Buat Laporan Audit Baru (Live On-Site Execution)"}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Lengkapi 3 pilar wajib analisis akar masalah, rencana aksi (CAPA), dan upload media bukti temuan.
+                  Lengkapi header area/line, 3 pilar wajib analisis, dan tambahkan beberapa temuan sekaligus jika diperlukan.
                 </p>
               </div>
               <button
@@ -815,13 +934,16 @@ export function AuditReportBuilder({
             )}
 
             <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* HEADER FIELDS: STRICTLY 3 AREAS (Cutting, Prep, CSC) & Line / Nomor Mesin */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Area Audit (Wajib Tag)</label>
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Area Audit (STRICTLY 3 AREA) *
+                  </label>
                   <select
-                    value={formData.area}
-                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                    value={formHeader.area}
+                    onChange={(e) => setFormHeader({ ...formHeader, area: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800 cursor-pointer"
                   >
                     <option value="Cutting">Cutting Area</option>
                     <option value="Prep">Prep Area</option>
@@ -830,11 +952,24 @@ export function AuditReportBuilder({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Domain Audit</label>
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Line / Nomor Mesin (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formHeader.lineNumber}
+                    onChange={(e) => setFormHeader({ ...formHeader, lineNumber: e.target.value })}
+                    placeholder="Contoh: Line 02, Mesin Clicker #4"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 block">Domain Audit</label>
                   <select
-                    value={formData.domain}
-                    onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                    value={formHeader.domain}
+                    onChange={(e) => setFormHeader({ ...formHeader, domain: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800 cursor-pointer"
                   >
                     <option value="MQAA">MQAA (Quality Assurance)</option>
                     <option value="6S">6S (Safety & Housekeeping)</option>
@@ -843,13 +978,37 @@ export function AuditReportBuilder({
                     <option value="PS">PS (Process Standardization)</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 block">Nama Auditor</label>
+                  <input
+                    type="text"
+                    value={formHeader.auditorName}
+                    onChange={(e) => setFormHeader({ ...formHeader, auditorName: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                    required
+                  />
+                </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Tingkat Keparahan (Severity)</label>
-                  <select
-                    value={formData.severity}
-                    onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
+                  <label className="text-xs font-bold text-slate-700 block">Tanggal Audit</label>
+                  <input
+                    type="date"
+                    value={formHeader.auditDate}
+                    onChange={(e) => setFormHeader({ ...formHeader, auditDate: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 block">Severity</label>
+                  <select
+                    value={formHeader.severity}
+                    onChange={(e) => setFormHeader({ ...formHeader, severity: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800 cursor-pointer"
                   >
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
@@ -859,184 +1018,183 @@ export function AuditReportBuilder({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Judul Temuan Audit</label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Contoh: Ketidaksesuaian Viskositas Lem Primer Line CSC..."
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Nama Auditor</label>
-                    <input
-                      type="text"
-                      value={formData.auditorName}
-                      onChange={(e) => setFormData({ ...formData, auditorName: e.target.value })}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Tanggal Audit</label>
-                    <input
-                      type="date"
-                      value={formData.auditDate}
-                      onChange={(e) => setFormData({ ...formData, auditDate: e.target.value })}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Deskripsi Temuan Lapangan</label>
-                <textarea
-                  value={formData.findingDescription}
-                  onChange={(e) => setFormData({ ...formData, findingDescription: e.target.value })}
-                  placeholder="Jelaskan fakta observasi, lokasi spesifik, instrumen atau komponen yang bermasalah..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 text-slate-800 h-20 resize-none"
-                  required
-                />
-              </div>
-
-              {/* MEDIA / PHOTO UPLOAD SECTION */}
-              <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl space-y-3">
+              {/* DYNAMIC FINDINGS LIST IN CREATION SESSION */}
+              <div className="space-y-4 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-indigo-600" />
-                    Foto / Media Temuan (Opsional - Maks. 5 foto, 5MB per file)
+                  <label className="text-xs font-black text-indigo-700 uppercase tracking-wider block">
+                    Daftar Temuan Lapangan ({formFindings.length} Temuan)
                   </label>
-                  <span className="text-[10px] text-slate-500 font-bold">
-                    {formData.photoUrls.length} / 5 Terpilih
-                  </span>
+                  {!editingReport && (
+                    <button
+                      type="button"
+                      onClick={handleAddAnotherFinding}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 cursor-pointer transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>+ Tambah Temuan Lain</span>
+                    </button>
+                  )}
                 </div>
 
-                {formData.photoUrls.length < 5 && (
-                  <div>
-                    <label className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 hover:border-indigo-300 text-indigo-700 text-xs font-bold rounded-xl cursor-pointer shadow-2xs transition-colors">
-                      <ImageIcon className="w-4 h-4 text-indigo-600" />
-                      <span>{isUploading ? "Mengunggah..." : "+ Pilih File Foto (JPG, PNG, WEBP)"}</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        multiple
-                        onChange={handleFileUpload}
-                        disabled={isUploading}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                )}
+                {formFindings.map((finding, fIndex) => (
+                  <div
+                    key={finding.id}
+                    className="p-4 bg-slate-50/90 border border-slate-200 rounded-2xl space-y-3 relative"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <span className="text-xs font-extrabold text-indigo-700 flex items-center gap-1.5">
+                        <span className="w-5 h-5 bg-indigo-600 text-white rounded-full inline-flex items-center justify-center text-[10px]">
+                          {fIndex + 1}
+                        </span>
+                        Temuan #{fIndex + 1}
+                      </span>
 
-                {/* Previews of uploaded images */}
-                {formData.photoUrls.length > 0 && (
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    {formData.photoUrls.map((url, idx) => (
-                      <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 group">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      {formFindings.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(idx)}
-                          className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full text-xs shadow-md hover:bg-rose-700 transition-colors cursor-pointer"
-                          title="Hapus foto"
+                          onClick={() => handleRemoveFindingRow(finding.id)}
+                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-rose-100"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 block">Judul Temuan #{fIndex + 1}</label>
+                      <input
+                        type="text"
+                        value={finding.title}
+                        onChange={(e) => handleFindingFieldChange(finding.id, "title", e.target.value)}
+                        placeholder={`Contoh: Ketidaksesuaian Viskositas Lem ${formHeader.area} ${formHeader.lineNumber ? `(${formHeader.lineNumber})` : ""}`}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 block">Deskripsi Temuan Lapangan</label>
+                      <textarea
+                        value={finding.findingDescription}
+                        onChange={(e) => handleFindingFieldChange(finding.id, "findingDescription", e.target.value)}
+                        placeholder="Jelaskan fakta observasi, lokasi spesifik, instrumen atau komponen bermasalah..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 text-slate-800 h-20 resize-none"
+                        required
+                      />
+                    </div>
+
+                    {/* PHOTO UPLOAD PER FINDING */}
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                          Foto Media Temuan (Maks. 5 Foto)
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-bold">{finding.photoUrls.length} / 5</span>
+                      </div>
+
+                      {finding.photoUrls.length < 5 && (
+                        <div>
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 hover:border-indigo-300 text-indigo-700 text-xs font-bold rounded-xl cursor-pointer">
+                            <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{isUploading ? "Mengunggah..." : "+ Upload Foto"}</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              multiple
+                              onChange={(e) => handleFileUpload(e, finding.id)}
+                              disabled={isUploading}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
+
+                      {finding.photoUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {finding.photoUrls.map((url, pIdx) => (
+                            <div key={pIdx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 group">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt={`Preview ${pIdx + 1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePhoto(finding.id, pIdx)}
+                                className="absolute top-1 right-1 p-0.5 bg-rose-600 text-white rounded-full text-xs shadow-md"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CHECKBOX ESKALASI KAIZEN */}
+                    <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-purple-900">
+                        <input
+                          type="checkbox"
+                          checked={finding.isKaizenEscalated}
+                          onChange={(e) => handleFindingFieldChange(finding.id, "isKaizenEscalated", e.target.checked)}
+                          className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
+                        />
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Eskalasi ke Kaizen PDCA 8 Langkah</span>
+                      </label>
+                    </div>
+
+                    {/* 3 REQUIRED COLUMNS WITH AI BUTTON PER FINDING ROW */}
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <span className="text-[11px] font-extrabold text-indigo-700 uppercase tracking-wider block">
+                          3 Pilar Wajib Analisis (Temuan #{fIndex + 1})
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAiAnalyzeFinding(finding.id)}
+                          disabled={analyzingFindingId === finding.id}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+                          <span>{analyzingFindingId === finding.id ? "Menganalisis..." : "✨ Analisis Action Plan (AI)"}</span>
                         </button>
                       </div>
-                    ))}
+
+                      <div className="space-y-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">1. Root Cause Analysis (Akar Masalah) *</label>
+                          <textarea
+                            value={finding.rootCause}
+                            onChange={(e) => handleFindingFieldChange(finding.id, "rootCause", e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 text-slate-800 h-16 resize-none"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">2. Action Plan Remediasi (CAPA) *</label>
+                          <textarea
+                            value={finding.actionPlan}
+                            onChange={(e) => handleFindingFieldChange(finding.id, "actionPlan", e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-800 h-16 resize-none"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">3. Key Lesson Learned (L&D Takeaway) *</label>
+                          <textarea
+                            value={finding.lessonLearned}
+                            onChange={(e) => handleFindingFieldChange(finding.id, "lessonLearned", e.target.value)}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-800 h-16 resize-none"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Checkbox Eskalasi Kaizen */}
-              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-2xl flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-purple-900">
-                  <input
-                    type="checkbox"
-                    checked={formData.isKaizenEscalated}
-                    onChange={(e) => setFormData({ ...formData, isKaizenEscalated: e.target.checked })}
-                    className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
-                  />
-                  <TrendingUp className="w-4 h-4 text-purple-600" />
-                  <span>Eskalasi Temuan Ini ke Lembar Kaizen 8 Langkah (PDCA)</span>
-                </label>
-                <span className="text-[10px] text-purple-700 font-semibold">Aktifkan untuk integrasi L&D</span>
-              </div>
-
-              {/* 3 PILARS WAJIB ANALISIS AUDIT WITH AI BUTTON */}
-              <div className="p-4 bg-slate-50/90 border border-slate-200/80 rounded-2xl space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-                  <span className="text-xs font-extrabold text-indigo-700 uppercase tracking-wider block">
-                    3 PILAR WAJIB ANALISIS AUDIT (REQUIRED AUDIT PILARS)
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={handleAiAnalyze}
-                    disabled={isAnalyzing}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-                    title="Otomatis isi Akar Masalah & Action Plan (CAPA) berdasarkan deskripsi temuan"
-                  >
-                    <Sparkles className="w-4 h-4 text-indigo-200" />
-                    <span>{isAnalyzing ? "Menganalisis AI..." : "✨ Analisis Action Plan (AI)"}</span>
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {/* Pilar 1: Root Cause */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 bg-indigo-600 text-white rounded-full inline-flex items-center justify-center text-[10px]">1</span>
-                      Akar Masalah (Root Cause Analysis - Pilar 1) *
-                    </label>
-                    <textarea
-                      value={formData.rootCause}
-                      onChange={(e) => setFormData({ ...formData, rootCause: e.target.value })}
-                      placeholder="Analisis mendalam mengapa masalah terjadi (metode 4M+1E)..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 text-slate-800 h-20 resize-none"
-                      required
-                    />
-                  </div>
-
-                  {/* Pilar 2: Action Plan */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 bg-emerald-600 text-white rounded-full inline-flex items-center justify-center text-[10px]">2</span>
-                      Rencana Perbaikan CAPA (Action Plan - Pilar 2) *
-                    </label>
-                    <textarea
-                      value={formData.actionPlan}
-                      onChange={(e) => setFormData({ ...formData, actionPlan: e.target.value })}
-                      placeholder="Langkah spesifik Jangka Pendek (Corrective) & Jangka Panjang (Preventive) beserta SLA..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 text-slate-800 h-20 resize-none"
-                      required
-                    />
-                  </div>
-
-                  {/* Pilar 3: Lesson Learned */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 bg-purple-600 text-white rounded-full inline-flex items-center justify-center text-[10px]">3</span>
-                      Pembelajaran Utama (Key L&D Insight - Pilar 3) *
-                    </label>
-                    <textarea
-                      value={formData.lessonLearned}
-                      onChange={(e) => setFormData({ ...formData, lessonLearned: e.target.value })}
-                      placeholder="Insight kunci / key takeaway untuk tim Learning & Development..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 text-slate-800 h-20 resize-none"
-                      required
-                    />
-                  </div>
-                </div>
+                ))}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -1049,10 +1207,10 @@ export function AuditReportBuilder({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || isUploading || isAnalyzing}
+                  disabled={isSubmitting || isUploading || Boolean(analyzingFindingId)}
                   className="flex-1 py-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs cursor-pointer disabled:opacity-50 transition-all"
                 >
-                  {isSubmitting ? "Menyimpan Laporan..." : editingReport ? "Simpan Perubahan Laporan" : "Simpan Laporan Audit"}
+                  {isSubmitting ? "Menyimpan Laporan..." : editingReport ? "Simpan Perubahan Laporan" : `Simpan ${formFindings.length} Laporan Audit`}
                 </button>
               </div>
             </form>

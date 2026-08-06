@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, ShieldCheck, Factory, AlertCircle, Eye, EyeOff, Sparkles, Key } from "lucide-react";
+import { Lock, ShieldCheck, Factory, AlertCircle, Eye, EyeOff, Sparkles, Key, Mail } from "lucide-react";
 
 export default function LoginPage() {
+  const [email, setEmail] = useState("admin@factory.com");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,13 +23,13 @@ export default function LoginPage() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMsg(data.error || "Password tidak valid. Silakan coba lagi.");
+        setErrorMsg(data.error || "Login tidak valid. Silakan coba lagi.");
         setLoading(false);
         return;
       }
@@ -64,7 +65,7 @@ export default function LoginPage() {
               The Audit Crucible
             </h1>
             <p className="text-sm text-gray-500 font-medium mt-1">
-              Fase Bulan 4 - 6 | Portal Autentikasi Auditor
+              Fase Bulan 4 - 6 | Portal Autentikasi User & Auditor
             </p>
           </div>
         </div>
@@ -73,9 +74,9 @@ export default function LoginPage() {
         <div className="bg-[#FAF7FB] border border-[#F2A7C6]/60 rounded-2xl p-3.5 text-xs text-gray-600 flex items-start gap-2.5">
           <ShieldCheck className="w-5 h-5 text-[#6A0DAD] shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-gray-800">Sistem Keamanan Terintegrasi</p>
+            <p className="font-semibold text-gray-800">Sistem Autentikasi RBAC Database</p>
             <p className="text-gray-500 mt-0.5">
-              Sesi terenkripsi cookie httpOnly. Terproteksi rate-limiting & proteksi sanitasi XSS.
+              Terenkripsi cookie JWT httpOnly. Terproteksi rate-limiting DB & RBAC per user.
             </p>
           </div>
         </div>
@@ -84,7 +85,26 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700 tracking-wide uppercase">
-              Kata Sandi Akses Auditor
+              Email Akun User
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <Mail className="w-5 h-5 text-[#A569BD]" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@factory.com"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50/80 border border-gray-200 focus:border-[#6A0DAD] focus:bg-white focus:ring-2 focus:ring-[#6A0DAD]/20 rounded-xl text-sm transition-all outline-none text-gray-800 placeholder-gray-400 font-medium"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-700 tracking-wide uppercase">
+              Kata Sandi Akses
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -124,7 +144,7 @@ export default function LoginPage() {
             {loading ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Memverifikasi Akses...</span>
+                <span>Memverifikasi Akun User...</span>
               </>
             ) : (
               <>
@@ -136,9 +156,12 @@ export default function LoginPage() {
         </form>
 
         {/* Footer info */}
-        <div className="pt-2 border-t border-gray-100 text-center">
-          <p className="text-[11px] text-gray-400 font-medium">
+        <div className="pt-2 border-t border-gray-100 text-center space-y-1">
+          <p className="text-[11px] text-gray-500 font-medium">
             Certified Engineering Manager (CEM) — Program Audit Sepatu On-Site
+          </p>
+          <p className="text-[10px] text-gray-400">
+            Akun Default: admin@factory.com (Role: Admin)
           </p>
         </div>
       </div>

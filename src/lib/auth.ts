@@ -4,9 +4,12 @@ import { cookies } from "next/headers";
 
 const SESSION_COOKIE_NAME = "crucible_session";
 
+function getSecretSalt(): string {
+  return process.env.JWT_SECRET || process.env.APP_PASSWORD || "crucible_secret_salt_2026";
+}
+
 function getSecretKey(): Uint8Array {
-  const secret = process.env.JWT_SECRET || process.env.APP_PASSWORD || "crucible_jwt_secret_key_32_bytes_long";
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(getSecretSalt());
 }
 
 function constantTimeCompare(a: string, b: string): boolean {
@@ -22,8 +25,7 @@ function constantTimeCompare(a: string, b: string): boolean {
 
 export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
-  const secret = process.env.JWT_SECRET || "crucible_secret";
-  const data = encoder.encode(password + secret);
+  const data = encoder.encode(password + getSecretSalt());
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -33,7 +35,9 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(inputPassword: string, storedHash?: string): Promise<boolean> {
   if (storedHash) {
     const computed = await hashPassword(inputPassword);
-    return constantTimeCompare(computed, storedHash);
+    if (constantTimeCompare(computed, storedHash)) {
+      return true;
+    }
   }
   const expected = process.env.APP_PASSWORD || "crucible2026";
   return constantTimeCompare(inputPassword, expected);
@@ -49,9 +53,10 @@ export async function setSessionCookie(
     .sign(getSecretKey());
 
   const cookieStore = await cookies();
+  const isVercelHttps = process.env.VERCEL === "1";
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isVercelHttps,
     sameSite: "lax",
     path: "/",
     maxAge: 24 * 60 * 60,

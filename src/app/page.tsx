@@ -9,7 +9,6 @@ import { AuditAreaScope, AreaType } from "@/components/AuditAreaScope";
 import { ThreeMonthTimeline, ChecklistItem } from "@/components/ThreeMonthTimeline";
 import { WeeklyCadenceSection } from "@/components/WeeklyCadenceSection";
 import { AuditReportBuilder, AuditReportItem } from "@/components/AuditReportBuilder";
-import { DynamicAuditForm, DynamicAuditFormData } from "@/components/DynamicAuditForm";
 import { DownloadResumeSection } from "@/components/DownloadResumeSection";
 import { SummaryDashboard } from "@/components/SummaryDashboard";
 import {
@@ -39,7 +38,7 @@ export default function DashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // App Grid Active Tab (Home, Audit, Kaizen, Cadence, Analytics)
+  // App Grid Active Tab
   const [activeTab, setActiveTab] = useState<"home" | "audit" | "kaizen" | "cadence" | "analytics">("home");
 
   // Mobile Menu Drawer State
@@ -281,26 +280,7 @@ export default function DashboardPage() {
     }
   }
 
-  // Handle Dynamic Audit Form submission
-  async function handleDynamicFormSubmit(formData: DynamicAuditFormData) {
-    for (const finding of formData.findings) {
-      await handleAddReport({
-        title: `Temuan Audit ${formData.area} (${formData.lineNumber})`,
-        area: formData.area,
-        domain: "MQAA",
-        findingDescription: finding.findingDescription,
-        rootCause: `[Akar Masalah - ${formData.area} / ${formData.lineNumber}]: Terjadi deviasi parameter operasional pada ${formData.lineNumber}.`,
-        actionPlan: `[CAPA Action - ${formData.area}]: Lakukan pemeriksaan dan penyesuaian instrumen di ${formData.lineNumber}.`,
-        lessonLearned: `[Key Takeaway]: Pentingnya pemeliharaan berkala pada ${formData.lineNumber}.`,
-        auditorName: "Auditor CEM",
-        severity: "Medium",
-        status: "Open",
-        auditDate: new Date().toISOString().split("T")[0],
-      });
-    }
-  }
-
-  // Count reports by area
+  // Count reports by area (Cutting, Prep, CSC)
   const reportCounts = {
     Cutting: reports.filter((r) => r.area === "Cutting").length,
     Prep: reports.filter((r) => r.area === "Prep").length,
@@ -439,7 +419,7 @@ export default function DashboardPage() {
                   BUAT AUDIT BARU
                 </h3>
                 <p className="text-[11px] text-slate-500 line-clamp-2">
-                  Multi-finding input form dengan dukungan AI.
+                  Laporan audit dengan multi-finding & AI CAPA.
                 </p>
               </div>
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-600">
@@ -583,8 +563,6 @@ export default function DashboardPage() {
           />
 
           <WeeklyCadenceSection />
-
-          <DynamicAuditForm onSubmit={handleDynamicFormSubmit} />
 
           <DownloadResumeSection checklists={checklists} reports={reports} />
 

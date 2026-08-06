@@ -1,7 +1,7 @@
 // File: src/app/kaizen/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, Sparkles, RefreshCw } from "lucide-react";
 import { KaizenPdcaModal } from "@/components/KaizenPdcaModal";
@@ -11,24 +11,29 @@ export default function KaizenPage() {
   const [selectedFinding, setSelectedFinding] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  async function loadKaizenData() {
-    setIsLoading(true);
+  const loadKaizenData = useCallback(async (isMounted: boolean) => {
     try {
       const res = await fetch("/api/kaizen");
       const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
+      if (isMounted && json.success && Array.isArray(json.data)) {
         setKaizenList(json.data);
       }
     } catch (err) {
       console.error("Failed to load Kaizen records:", err);
     } finally {
-      setIsLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
-    loadKaizenData();
-  }, []);
+    let isMounted = true;
+    loadKaizenData(isMounted);
+    return () => {
+      isMounted = false;
+    };
+  }, [loadKaizenData]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-16 p-4 md:p-8 space-y-6">
@@ -133,7 +138,7 @@ export default function KaizenPage() {
           aiRootCause={selectedFinding.aiRootCause}
           area={selectedFinding.area}
           onClose={() => setSelectedFinding(null)}
-          onSaveSuccess={loadKaizenData}
+          onSaveSuccess={() => loadKaizenData(true)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { ShieldCheck, Sparkles, Eye, HardHat, Cog, Tag } from "lucide-react";
 
 export type DomainType = "MQAA" | "6S" | "Visual Management" | "HSE" | "PS" | string;
@@ -11,14 +12,14 @@ interface DomainBadgeProps {
   size?: "sm" | "md" | "lg";
 }
 
-export function getDomainIcon(domain: string) {
+export function renderDomainIcon(domain: string, className: string) {
   const norm = domain.trim().toLowerCase();
-  if (norm.includes("mqaa")) return ShieldCheck;
-  if (norm.includes("6s")) return Sparkles;
-  if (norm.includes("visual") || norm.includes("vm")) return Eye;
-  if (norm.includes("hse") || norm.includes("k3")) return HardHat;
-  if (norm.includes("ps") || norm.includes("process")) return Cog;
-  return Tag;
+  if (norm.includes("mqaa")) return <ShieldCheck className={className} />;
+  if (norm.includes("6s")) return <Sparkles className={className} />;
+  if (norm.includes("visual") || norm.includes("vm")) return <Eye className={className} />;
+  if (norm.includes("hse") || norm.includes("k3")) return <HardHat className={className} />;
+  if (norm.includes("ps") || norm.includes("process")) return <Cog className={className} />;
+  return <Tag className={className} />;
 }
 
 export function getDomainConfig(domain: string) {
@@ -78,7 +79,6 @@ export function getDomainConfig(domain: string) {
 }
 
 export function DomainBadge({ domain, showIcon = true, className = "", size = "md" }: DomainBadgeProps) {
-  const Icon = getDomainIcon(domain);
   const config = getDomainConfig(domain);
 
   const sizeClasses = {
@@ -97,8 +97,10 @@ export function DomainBadge({ domain, showIcon = true, className = "", size = "m
     <span
       className={`inline-flex items-center border ${config.bg} ${config.text} ${config.border} ${sizeClasses[size]} transition-all duration-200 shadow-xs hover:shadow-sm ${className}`}
     >
-      {showIcon && <Icon className={iconSizes[size]} />}
+      {showIcon && renderDomainIcon(domain, iconSizes[size])}
       <span>{domain}</span>
     </span>
   );
 }
+
+export default DomainBadge;

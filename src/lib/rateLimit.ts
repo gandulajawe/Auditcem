@@ -3,59 +3,90 @@ import { db } from "@/db";
 import { loginAttempts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-interface RateLimitRecord {
-  count: number;
-  resetAt: number;
+export interface RateLimitCheckResult {
+  allowed: boolean;
+  remainingAttempts: number;
+  retryAfterMinutes?: number;
 }
 
-const memoryRateLimitMap = new Map<string, RateLimitRecord>();
+/**
+ * Note: Extracting the IP address from the x-forwarded-for header is safe and reliable
+ * when deployed behind a trusted reverse proxy (e.g., Vercel / Cloudflare) which sanitizes incoming headers.
+ */
 
 /**
- * In-Memory Rate Limiter
+ * Database-backed rate limit checker (Persistent across serverless cold starts / multi-instance functions)
  */
-export function checkRateLimit(
-  identifier: string,
-  limit: number = 5,
-  windowMs: number = 15 * 60 * 1000 // 15 minutes default
-): { allowed: boolean; remainingAttempts: number; retryAfterMinutes?: number } {
-  const now = Date.now();
-  const record = memoryRateLimitMap.get(identifier);
+export async function checkDatabaseRateLimit(
+  ipAddress: string,
+  maxAttempts: number = 5,
+  lockoutMinutes: number = 15
+): Promise<RateLimitCheckResult> {
+  try {
+    const now = new Date();
+    const records = await db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.ipAddress, ipAddress));
 
-  if (!record || now > record.resetAt) {
-    memoryRateLimitMap.set(identifier, {
-      count: 1,
-      resetAt: now + windowMs,
-    });
-    return { allowed: true, remainingAttempts: limit - 1 };
-  }
+    if (records.length === 0) {
+      return { allowed: true, remainingAttempts: maxAttempts };
+    }
 
-  if (record.count >= limit) {
-    const remainingMs = record.resetAt - now;
-    const retryAfterMinutes = Math.ceil(remainingMs / (1000 * 60));
+    const record = records[0];
+
+    // Check if account is currently locked
+    if (record.lockedUntil) {
+      const lockedUntilDate = new Date(record.lockedUntil);
+      if (lockedUntilDate > now) {
+        const remainingMs = lockedUntilDate.getTime() - now.getTime();
+        const retryAfterMinutes = Math.max(1, Math.ceil(remainingMs / (1000 * 60)));
+        return {
+          allowed: false,
+          remainingAttempts: 0,
+          retryAfterMinutes,
+        };
+      } else {
+        // Lockout expired -> reset attempts
+        await db
+          .update(loginAttempts)
+          .set({
+            attemptCount: 0,
+            lockedUntil: null,
+            lastAttemptAt: now,
+          })
+          .where(eq(loginAttempts.ipAddress, ipAddress));
+        return { allowed: true, remainingAttempts: maxAttempts };
+      }
+    }
+
+    if (record.attemptCount >= maxAttempts) {
+      const lockedUntil = new Date(now.getTime() + lockoutMinutes * 60 * 1000);
+      await db
+        .update(loginAttempts)
+        .set({
+          lockedUntil,
+          lastAttemptAt: now,
+        })
+        .where(eq(loginAttempts.ipAddress, ipAddress));
+      return { allowed: false, remainingAttempts: 0, retryAfterMinutes: lockoutMinutes };
+    }
+
     return {
-      allowed: false,
-      remainingAttempts: 0,
-      retryAfterMinutes,
+      allowed: true,
+      remainingAttempts: Math.max(0, maxAttempts - record.attemptCount),
     };
+  } catch (error) {
+    console.error("checkDatabaseRateLimit error:", error);
+    return { allowed: true, remainingAttempts: maxAttempts };
   }
-
-  record.count += 1;
-  memoryRateLimitMap.set(identifier, record);
-
-  return {
-    allowed: true,
-    remainingAttempts: limit - record.count,
-  };
 }
 
-export function resetRateLimit(identifier: string): void {
-  memoryRateLimitMap.delete(identifier);
-}
-
-/**
- * Database-backed rate limit helper for persistent lockout across restarts
- */
-export async function recordFailedAttempt(ipAddress: string): Promise<{ remainingAttempts: number; isLocked: boolean }> {
+export async function recordFailedAttempt(
+  ipAddress: string,
+  maxAttempts: number = 5,
+  lockoutMinutes: number = 15
+): Promise<{ remainingAttempts: number; isLocked: boolean }> {
   try {
     const now = new Date();
     const records = await db
@@ -69,14 +100,14 @@ export async function recordFailedAttempt(ipAddress: string): Promise<{ remainin
         attemptCount: 1,
         lastAttemptAt: now,
       });
-      return { remainingAttempts: 4, isLocked: false };
+      return { remainingAttempts: maxAttempts - 1, isLocked: false };
     }
 
     const record = records[0];
     const newCount = record.attemptCount + 1;
 
-    if (newCount >= 5) {
-      const lockedUntil = new Date(now.getTime() + 15 * 60 * 1000);
+    if (newCount >= maxAttempts) {
+      const lockedUntil = new Date(now.getTime() + lockoutMinutes * 60 * 1000);
       await db
         .update(loginAttempts)
         .set({
@@ -96,7 +127,7 @@ export async function recordFailedAttempt(ipAddress: string): Promise<{ remainin
       })
       .where(eq(loginAttempts.ipAddress, ipAddress));
 
-    return { remainingAttempts: 5 - newCount, isLocked: false };
+    return { remainingAttempts: maxAttempts - newCount, isLocked: false };
   } catch (error) {
     console.error("Record failed attempt error:", error);
     return { remainingAttempts: 0, isLocked: false };
@@ -112,7 +143,6 @@ export async function resetFailedAttempts(ipAddress: string): Promise<void> {
         lockedUntil: null,
       })
       .where(eq(loginAttempts.ipAddress, ipAddress));
-    resetRateLimit(ipAddress);
   } catch (error) {
     console.error("Reset failed attempts error:", error);
   }

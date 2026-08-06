@@ -14,7 +14,7 @@ export const users = pgTable("users", {
 // Tabel audits (Header)
 export const audits = pgTable("audits", {
   id: serial("id").primaryKey(),
-  area: text("area").notNull(), // 'Cutting', 'Prep', 'CSC', dll.
+  area: text("area").notNull(), // 'Cutting', 'Prep', 'CSC'
   lineNumber: text("line_number").notNull(), // Input Line / Nomor Mesin
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -95,6 +95,7 @@ export const auditReports = pgTable("audit_reports", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   area: text("area").notNull(), // 'Cutting', 'Prep', 'CSC'
+  lineNumber: text("line_number"), // Line / Nomor Mesin (Opsional)
   domain: text("domain").notNull(), // 'MQAA', '6S', 'Visual Management', 'HSE', 'PS'
   findingDescription: text("finding_description").notNull(),
   rootCause: text("root_cause").notNull(), // Required Column #1

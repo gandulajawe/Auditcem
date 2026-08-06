@@ -1,13 +1,16 @@
+// File: src/app/api/reports/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { auditReports } from "@/db/schema";
+import { auditReports, auditLogs } from "@/db/schema";
 import { ensureInitialData } from "@/lib/seedData";
 import { sanitizeInput } from "@/lib/sanitize";
+import { getSession } from "@/lib/auth";
 import { eq, desc } from "drizzle-orm";
 
 export async function GET() {
   try {
     await ensureInitialData();
+    // TODO: add pagination when data grows
     const reports = await db
       .select()
       .from(auditReports)
@@ -25,29 +28,86 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const userRole = String(session.role || "auditor");
+    if (userRole === "viewer") {
+      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
 
-    const title = sanitizeInput(body.title || "");
     const area = sanitizeInput(body.area || "Cutting");
+    const lineNumber = body.lineNumber ? sanitizeInput(body.lineNumber) : null;
     const domain = sanitizeInput(body.domain || "MQAA");
-    const findingDescription = sanitizeInput(body.findingDescription || "");
-    
-    // Required 3 columns
-    const rootCause = sanitizeInput(body.rootCause || "");
-    const actionPlan = sanitizeInput(body.actionPlan || "");
-    const lessonLearned = sanitizeInput(body.lessonLearned || "");
-
-    const auditorName = sanitizeInput(body.auditorName || "CEM Auditor");
+    const auditorName = sanitizeInput(body.auditorName || performer);
     const severity = sanitizeInput(body.severity || "Medium");
     const status = sanitizeInput(body.status || "Open");
     const auditDate = sanitizeInput(body.auditDate || new Date().toISOString().split("T")[0]);
 
-    // photoUrls array
+    if (Array.isArray(body.findings) && body.findings.length > 0) {
+      const recordsToInsert = body.findings.map((f: any) => {
+        const title = sanitizeInput(f.title || `Temuan Audit ${area}`);
+        const findingDescription = sanitizeInput(f.findingDescription || "");
+        const rootCause = sanitizeInput(f.rootCause || "");
+        const actionPlan = sanitizeInput(f.actionPlan || "");
+        const lessonLearned = sanitizeInput(f.lessonLearned || "");
+        const isKaizenEscalated = Boolean(f.isKaizenEscalated);
+        const photoUrls: string[] = Array.isArray(f.photoUrls)
+          ? f.photoUrls.map((url: unknown) => (typeof url === "string" ? sanitizeInput(url) : ""))
+          : [];
+
+        return {
+          title,
+          area,
+          lineNumber,
+          domain,
+          findingDescription,
+          rootCause,
+          actionPlan,
+          lessonLearned,
+          auditorName,
+          severity,
+          status,
+          auditDate,
+          isKaizenEscalated,
+          photoUrls: photoUrls.length > 0 ? photoUrls : null,
+        };
+      });
+
+      const insertedRecords = await db
+        .insert(auditReports)
+        .values(recordsToInsert)
+        .returning();
+
+      // Log action with real user from session
+      await db.insert(auditLogs).values({
+        action: "CREATE",
+        entity: "AUDIT_REPORTS",
+        entityId: insertedRecords[0].id,
+        details: `Batch created ${insertedRecords.length} audit reports by ${performer}`,
+        performedBy: performer,
+      });
+
+      return NextResponse.json({ success: true, data: insertedRecords[0], insertedRecords });
+    }
+
+    // Single report submission
+    const title = sanitizeInput(body.title || `Temuan Audit ${area}`);
+    const findingDescription = sanitizeInput(body.findingDescription || "");
+    const rootCause = sanitizeInput(body.rootCause || "");
+    const actionPlan = sanitizeInput(body.actionPlan || "");
+    const lessonLearned = sanitizeInput(body.lessonLearned || "");
+    const isKaizenEscalated = Boolean(body.isKaizenEscalated);
+
     const photoUrls: string[] = Array.isArray(body.photoUrls)
       ? body.photoUrls.map((url: unknown) => (typeof url === "string" ? sanitizeInput(url) : ""))
       : [];
 
-    // Validate required fields
     if (!title || !findingDescription) {
       return NextResponse.json(
         { success: false, error: "Judul dan deskripsi temuan wajib diisi." },
@@ -70,6 +130,7 @@ export async function POST(request: NextRequest) {
       .values({
         title,
         area,
+        lineNumber,
         domain,
         findingDescription,
         rootCause,
@@ -79,9 +140,18 @@ export async function POST(request: NextRequest) {
         severity,
         status,
         auditDate,
+        isKaizenEscalated,
         photoUrls: photoUrls.length > 0 ? photoUrls : null,
       })
       .returning();
+
+    await db.insert(auditLogs).values({
+      action: "CREATE",
+      entity: "AUDIT_REPORTS",
+      entityId: newReport[0].id,
+      details: `Created report ID #${newReport[0].id} by ${performer}`,
+      performedBy: performer,
+    });
 
     return NextResponse.json({ success: true, data: newReport[0] });
   } catch (error) {
@@ -95,6 +165,17 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const userRole = String(session.role || "auditor");
+    if (userRole === "viewer") {
+      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const { id } = body;
 
@@ -109,6 +190,7 @@ export async function PATCH(request: NextRequest) {
 
     if (body.title !== undefined) updateData.title = sanitizeInput(body.title);
     if (body.area !== undefined) updateData.area = sanitizeInput(body.area);
+    if (body.lineNumber !== undefined) updateData.lineNumber = body.lineNumber ? sanitizeInput(body.lineNumber) : null;
     if (body.domain !== undefined) updateData.domain = sanitizeInput(body.domain);
     if (body.findingDescription !== undefined) updateData.findingDescription = sanitizeInput(body.findingDescription);
     if (body.rootCause !== undefined) updateData.rootCause = sanitizeInput(body.rootCause);
@@ -118,6 +200,7 @@ export async function PATCH(request: NextRequest) {
     if (body.severity !== undefined) updateData.severity = sanitizeInput(body.severity);
     if (body.status !== undefined) updateData.status = sanitizeInput(body.status);
     if (body.auditDate !== undefined) updateData.auditDate = sanitizeInput(body.auditDate);
+    if (body.isKaizenEscalated !== undefined) updateData.isKaizenEscalated = Boolean(body.isKaizenEscalated);
     if (body.photoUrls !== undefined) {
       updateData.photoUrls = Array.isArray(body.photoUrls)
         ? body.photoUrls.map((url: unknown) => (typeof url === "string" ? sanitizeInput(url) : ""))
@@ -129,6 +212,14 @@ export async function PATCH(request: NextRequest) {
       .set(updateData)
       .where(eq(auditReports.id, Number(id)))
       .returning();
+
+    await db.insert(auditLogs).values({
+      action: "UPDATE",
+      entity: "AUDIT_REPORTS",
+      entityId: Number(id),
+      details: `Updated report ID #${id} by ${performer}`,
+      performedBy: performer,
+    });
 
     return NextResponse.json({ success: true, data: updated[0] });
   } catch (error) {
@@ -142,6 +233,20 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const userRole = String(session.role || "auditor");
+    if (userRole !== "admin") {
+      return NextResponse.json(
+        { success: false, error: "Akses ditolak. Hanya peran Admin yang diizinkan untuk menghapus laporan audit." },
+        { status: 403 }
+      );
+    }
+
+    const performer = String(session.name || session.email || "Admin");
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -153,6 +258,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     await db.delete(auditReports).where(eq(auditReports.id, Number(id)));
+
+    await db.insert(auditLogs).values({
+      action: "DELETE",
+      entity: "AUDIT_REPORTS",
+      entityId: Number(id),
+      details: `Deleted report ID #${id} by ${performer}`,
+      performedBy: performer,
+    });
 
     return NextResponse.json({ success: true, message: "Laporan berhasil dihapus." });
   } catch (error) {

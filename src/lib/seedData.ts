@@ -6,7 +6,38 @@ import { eq } from "drizzle-orm";
 
 export async function ensureInitialData() {
   try {
-    // Check if initial seeding flag is already present
+    // 1. Always ensure default users exist if users table is empty
+    const existingUsers = await db.select().from(users);
+    if (existingUsers.length === 0) {
+      const defaultPassword = process.env.APP_PASSWORD || "crucible2026";
+      const adminHash = await hashPassword(defaultPassword);
+      const auditorHash = await hashPassword("auditor2026");
+      const viewerHash = await hashPassword("viewer2026");
+
+      await db.insert(users).values([
+        {
+          name: "Admin Auditor",
+          email: "admin@factory.com",
+          password: adminHash,
+          role: "admin",
+        },
+        {
+          name: "Auditor Gandul",
+          email: "auditor@factory.com",
+          password: auditorHash,
+          role: "auditor",
+        },
+        {
+          name: "Viewer Pabrik",
+          email: "viewer@factory.com",
+          password: viewerHash,
+          role: "viewer",
+        },
+      ]);
+      console.log("Seeded default users (Admin, Auditor, Viewer).");
+    }
+
+    // 2. Check if initial checklist seeding flag is already present
     const seededFlag = await db
       .select()
       .from(appSettings)
@@ -16,23 +47,11 @@ export async function ensureInitialData() {
       return;
     }
 
-    console.log("Seeding initial database records...");
+    console.log("Seeding initial checklist, cadence, and report records...");
 
-    // 1. Seed Initial Admin User
-    const existingUsers = await db.select().from(users).where(eq(users.email, "admin@factory.com"));
-    if (existingUsers.length === 0) {
-      const hashedPassword = await hashPassword(process.env.APP_PASSWORD || "crucible2026");
-      await db.insert(users).values({
-        name: "Admin Auditor",
-        email: "admin@factory.com",
-        password: hashedPassword,
-        role: "admin",
-      });
-    }
-
-    // 2. Seed Checklists
+    // Seed Checklists
     await db.insert(auditChecklists).values([
-      // Agustus (Month 4)
+      // Agustus
       {
         month: "Agustus",
         domain: "MQAA",
@@ -67,7 +86,7 @@ export async function ensureInitialData() {
         isCustom: false,
       },
 
-      // September (Month 5)
+      // September
       {
         month: "September",
         domain: "MQAA",
@@ -102,7 +121,7 @@ export async function ensureInitialData() {
         isCustom: false,
       },
 
-      // Oktober (Month 6)
+      // Oktober
       {
         month: "Oktober",
         domain: "MQAA",
@@ -160,7 +179,7 @@ export async function ensureInitialData() {
       },
     ]);
 
-    // 3. Seed Weekly Cadence / Reports
+    // Seed Weekly Cadence / Reports
     await db.insert(weeklyReports).values([
       {
         weekNumber: 1,
@@ -196,7 +215,7 @@ export async function ensureInitialData() {
       },
     ]);
 
-    // 4. Seed Audit Reports
+    // Seed Audit Reports
     await db.insert(auditReports).values([
       {
         title: "Fluktuasi Suhu Oven Aktivasi Lem pada Line CSC #2",
@@ -239,7 +258,7 @@ export async function ensureInitialData() {
       },
     ]);
 
-    // 5. Store seed flag in app_settings
+    // Store seed flag
     await db.insert(appSettings).values({
       key: "checklists_seeded",
       value: "true",

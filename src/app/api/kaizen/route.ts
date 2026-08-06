@@ -1,8 +1,9 @@
 // File: src/app/api/kaizen/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { kaizenPdca, auditFindings } from "@/db/schema";
+import { kaizenPdca, auditFindings, auditLogs } from "@/db/schema";
 import { sanitizeInput } from "@/lib/sanitize";
+import { getSession } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
     const findingId = searchParams.get("findingId");
 
     if (!findingId) {
+      // TODO: add pagination when data grows
       const allKaizen = await db.select().from(kaizenPdca);
       return NextResponse.json({ success: true, data: allKaizen });
     }
@@ -36,6 +38,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const userRole = String(session.role || "auditor");
+    if (userRole === "viewer") {
+      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const findingId = Number(body.findingId);
 
@@ -57,7 +70,6 @@ export async function POST(request: NextRequest) {
     const beforePhotoUrl = sanitizeInput(body.beforePhotoUrl || "");
     const afterPhotoUrl = sanitizeInput(body.afterPhotoUrl || "");
 
-    // Check if entry already exists
     const existing = await db
       .select()
       .from(kaizenPdca)
@@ -66,7 +78,6 @@ export async function POST(request: NextRequest) {
     let resultRecord;
 
     if (existing.length > 0) {
-      // Update existing
       const [updated] = await db
         .update(kaizenPdca)
         .set({
@@ -85,7 +96,6 @@ export async function POST(request: NextRequest) {
         .returning();
       resultRecord = updated;
     } else {
-      // Insert new
       const [inserted] = await db
         .insert(kaizenPdca)
         .values({
@@ -105,11 +115,19 @@ export async function POST(request: NextRequest) {
       resultRecord = inserted;
     }
 
-    // Also set isKaizenEscalated = true on auditFindings
+    // Set isKaizenEscalated = true
     await db
       .update(auditFindings)
       .set({ isKaizenEscalated: true })
       .where(eq(auditFindings.id, findingId));
+
+    await db.insert(auditLogs).values({
+      action: "UPDATE",
+      entity: "KAIZEN_PDCA",
+      entityId: findingId,
+      details: `Saved Kaizen sheet for finding #${findingId} by ${performer}`,
+      performedBy: performer,
+    });
 
     return NextResponse.json({ success: true, data: resultRecord });
   } catch (error: any) {
