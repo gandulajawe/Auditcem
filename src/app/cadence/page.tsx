@@ -3,11 +3,10 @@
 
 import React, { useState, useEffect } from "react";
 import { format, startOfWeek, addWeeks, subWeeks, addDays, isSameDay } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Save, Edit2, CheckCircle2, AlertCircle, ArrowLeft, Sparkles, Clock, Check } from "lucide-react";
+import { id as idLocale } from "date-fns/locale/id"; // <-- Tambahkan /id di sini
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Save, Edit2, CheckCircle2, AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { saveWeeklyCadenceAction } from "@/app/actions/cadenceActions";
-
 interface DayAgenda {
   date: Date;
   dayNameIndo: string;
