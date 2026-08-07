@@ -320,17 +320,40 @@ export function AuditReportBuilder({
       const data = await res.json();
 
       if (res.ok && data.success) {
+        const aiRootCause = data.rootCause || data.summary || "";
+        const aiActionPlan = data.actionPlan || "";
+
+        const filledFieldsToOverwrite: string[] = [];
+        if (aiRootCause && finding.rootCause.trim().length > 0 && finding.rootCause.trim() !== aiRootCause.trim()) {
+          filledFieldsToOverwrite.push("Root Cause Analysis");
+        }
+        if (aiActionPlan && finding.actionPlan.trim().length > 0 && finding.actionPlan.trim() !== aiActionPlan.trim()) {
+          filledFieldsToOverwrite.push("Action Plan Remediasi (CAPA)");
+        }
+
+        let allowOverwrite = true;
+        if (filledFieldsToOverwrite.length > 0) {
+          allowOverwrite = window.confirm(
+            `Field berikut sudah diisi manual:\n- ${filledFieldsToOverwrite.join("\n- ")}\n\nTimpa dengan hasil AI? (Klik Cancel untuk mempertahankan isian manual, field lain yang masih kosong tetap akan diisi AI)`
+          );
+        }
+
         setFormFindings((prev) =>
-          prev.map((f) =>
-            f.id === findingId
-              ? {
-                  ...f,
-                  rootCause: data.rootCause || data.summary || f.rootCause,
-                  actionPlan: data.actionPlan || f.actionPlan,
-                  issueCategory: data.issueCategory || f.issueCategory,
-                }
-              : f
-          )
+          prev.map((f) => {
+            if (f.id !== findingId) return f;
+            return {
+              ...f,
+              rootCause:
+                aiRootCause && (allowOverwrite || f.rootCause.trim().length === 0)
+                  ? aiRootCause
+                  : f.rootCause,
+              actionPlan:
+                aiActionPlan && (allowOverwrite || f.actionPlan.trim().length === 0)
+                  ? aiActionPlan
+                  : f.actionPlan,
+              issueCategory: data.issueCategory || f.issueCategory,
+            };
+          })
         );
       } else {
         setFormError(data.error || "Gagal menganalisis temuan dengan AI.");

@@ -1,130 +1,140 @@
-// File: src/app/actions/auditActions.ts
 "use server";
 
 import { db } from "@/db";
-import { audits, auditFindings, auditLogs } from "@/db/schema";
+import { auditReports as audits, auditChecklists as auditFindings, auditLogs } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { sanitizeInput } from "@/lib/sanitize";
-import { analyzeAuditFindingWithAi } from "@/lib/aiAudit";
 import { revalidatePath } from "next/cache";
 
-export interface FindingInputItem {
-  findingDescription: string;
-  isKaizenEscalated?: boolean;
-}
-
-export interface CreateAuditInput {
-  area: string;
-  lineNumber: string;
-  findings: FindingInputItem[];
-}
-
 export interface AIFindingAnalysis {
-  findingDescription: string;
-  rootCause: string;
-  capaRecommendation: string;
-  isKaizenEscalated?: boolean;
+  category?: string;
+  rootCause?: string;
+  actionPlan?: string;
+  lessonLearned?: string;
+  severity?: string;
 }
 
-export interface CreateAuditResult {
-  success: boolean;
-  auditId?: number;
-  message?: string;
-  error?: string;
-  analysisResults?: AIFindingAnalysis[];
-}
-
-/**
- * Server Action to process audit findings array with Gemini AI,
- * save Header to `audits` table, and loop-save detail results to `audit_findings` table.
- */
-export async function processAndSaveAuditAction(
-  input: CreateAuditInput
-): Promise<CreateAuditResult> {
+export async function processAndSaveAuditAction(payload: any) {
   try {
     const session = await getSession();
-    const performer = String(session?.name || session?.email || "Auditor");
-
-    const area = sanitizeInput(input.area || "Cutting");
-    const lineNumber = sanitizeInput(input.lineNumber || "Line 01");
-    const rawFindings = Array.isArray(input.findings) ? input.findings : [];
-
-    const validFindings = rawFindings
-      .map((f) => ({
-        findingDescription: sanitizeInput(f.findingDescription || "").trim(),
-        isKaizenEscalated: Boolean(f.isKaizenEscalated),
-      }))
-      .filter((f) => f.findingDescription.length > 0);
-
-    if (!lineNumber) {
-      return { success: false, error: "Line / Nomor Mesin wajib diisi." };
+    if (!session || !session.auth) {
+      return { success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." };
     }
 
-    if (validFindings.length === 0) {
-      return { success: false, error: "Minimal 1 deskripsi temuan lapangan wajib diisi." };
-    }
+    const performer = String(session.name || session.email || "Auditor");
+    
+    const area = sanitizeInput(payload?.area || "Cutting");
+    const lineNumber = sanitizeInput(payload?.lineNumber || "") || null;
+    const rawFindings = Array.isArray(payload?.findings) ? payload.findings : [payload];
 
-    const aiAnalysisList: AIFindingAnalysis[] = [];
+    const insertedRecords = [];
 
-    for (const fItem of validFindings) {
-      const aiResult = await analyzeAuditFindingWithAi({
-        description: fItem.findingDescription,
-        area,
+    for (const item of rawFindings) {
+      if (!item) continue;
+      const title = sanitizeInput(item.title || item.description || "Temuan Audit Baru");
+      const domain = sanitizeInput(item.domain || payload?.domain || "MQAA");
+      const findingDescription = sanitizeInput(item.findingDescription || item.description || title);
+      const rootCause = sanitizeInput(item.rootCause || item.aiAnalysis?.rootCause || "-");
+      const actionPlan = sanitizeInput(item.actionPlan || item.aiAnalysis?.actionPlan || "-");
+      const lessonLearned = sanitizeInput(item.lessonLearned || item.aiAnalysis?.lessonLearned || "-");
+      const severity = sanitizeInput(item.severity || item.aiAnalysis?.severity || "Medium");
+      const status = sanitizeInput(item.status || "Open");
+      const auditDate = sanitizeInput(item.auditDate || payload?.auditDate || new Date().toISOString().split("T")[0]);
+      const issueCategory = sanitizeInput(item.issueCategory || item.aiAnalysis?.category || "") || null;
+
+      const [inserted] = await db
+        .insert(audits)
+        .values({
+          title,
+          area,
+          lineNumber,
+          domain,
+          findingDescription,
+          rootCause,
+          actionPlan,
+          lessonLearned,
+          auditorName: performer,
+          severity,
+          status,
+          auditDate,
+          issueCategory,
+        })
+        .returning();
+
+      insertedRecords.push(inserted);
+
+      await db.insert(auditLogs).values({
+        action: "CREATE",
+        entity: "AUDIT_REPORT",
+        entityId: inserted.id,
+        details: "Membuat laporan audit baru " + title + " di area " + area,
+        performedBy: performer,
       });
-
-      aiAnalysisList.push({
-        findingDescription: fItem.findingDescription,
-        rootCause: aiResult.rootCause,
-        capaRecommendation: aiResult.actionPlan,
-        isKaizenEscalated: fItem.isKaizenEscalated,
-      });
     }
 
-    // Database Insertion:
-    // a. Insert Header into `audits` table
+    revalidatePath("/audit");
+    revalidatePath("/analytics");
+
+    return { success: true, data: insertedRecords };
+  } catch (error) {
+    console.error("Error processAndSaveAuditAction:", error);
+    return { success: false, error: "Gagal memproses dan menyimpan laporan audit." };
+  }
+}
+
+export async function createAuditAction(formData: FormData) {
+  try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return { success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." };
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
+
+    const title = sanitizeInput(String(formData.get("title") || "Temuan Audit Baru"));
+    const area = sanitizeInput(String(formData.get("area") || "Cutting"));
+    const lineNumber = sanitizeInput(String(formData.get("lineNumber") || "")) || null;
+    const domain = sanitizeInput(String(formData.get("domain") || "MQAA"));
+    const findingDescription = sanitizeInput(String(formData.get("findingDescription") || title));
+    const rootCause = sanitizeInput(String(formData.get("rootCause") || "-"));
+    const actionPlan = sanitizeInput(String(formData.get("actionPlan") || "-"));
+    const lessonLearned = sanitizeInput(String(formData.get("lessonLearned") || "-"));
+    const severity = sanitizeInput(String(formData.get("severity") || "Medium"));
+    const status = sanitizeInput(String(formData.get("status") || "Open"));
+    const auditDate = sanitizeInput(String(formData.get("auditDate") || new Date().toISOString().split("T")[0]));
+
     const [insertedAudit] = await db
       .insert(audits)
       .values({
+        title,
         area,
         lineNumber,
+        domain,
+        findingDescription,
+        rootCause,
+        actionPlan,
+        lessonLearned,
+        auditorName: performer,
+        severity,
+        status,
+        auditDate,
       })
       .returning();
 
-    const auditId = insertedAudit.id;
-
-    // b. Loop & Insert detail results into `audit_findings` table
-    const findingsToInsert = aiAnalysisList.map((item, idx) => ({
-      auditId,
-      findingDescription: item.findingDescription,
-      aiRootCause: item.rootCause,
-      aiCapa: item.capaRecommendation,
-      isKaizenEscalated: validFindings[idx]?.isKaizenEscalated || false,
-    }));
-
-    await db.insert(auditFindings).values(findingsToInsert);
-
-    // c. Audit Log Record with real user from session
     await db.insert(auditLogs).values({
       action: "CREATE",
-      entity: "AUDITS",
-      entityId: auditId,
-      details: `Saved Audit Header ID #${auditId} (${area} / ${lineNumber}) with ${findingsToInsert.length} detail findings`,
+      entity: "AUDIT_REPORT",
+      entityId: insertedAudit.id,
+      details: "Membuat laporan audit baru " + title + " di area " + area,
       performedBy: performer,
     });
 
-    revalidatePath("/");
+    revalidatePath("/audit");
+    revalidatePath("/analytics");
 
-    return {
-      success: true,
-      auditId,
-      message: `Audit #${auditId} (${area} - ${lineNumber}) berhasil disimpan ke database beserta ${findingsToInsert.length} analisis AI!`,
-      analysisResults: aiAnalysisList,
-    };
-  } catch (error: any) {
-    console.error("processAndSaveAuditAction Server Action Error:", error);
-    return {
-      success: false,
-      error: error?.message || "Terjadi kesalahan server saat memproses audit.",
-    };
+    return { success: true, data: insertedAudit };
+  } catch (error) {
+    console.error("Error createAuditAction:", error);
+    return { success: false, error: "Gagal menyimpan laporan audit." };
   }
 }

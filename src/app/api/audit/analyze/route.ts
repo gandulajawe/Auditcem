@@ -1,41 +1,44 @@
-// File: src/app/api/audit/analyze/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { sanitizeInput } from "@/lib/sanitize";
-import { analyzeAuditFindingWithAi } from "@/lib/aiAudit";
+import { NextResponse } from "next/server";
+import { generateActionPlanFromRootCause } from "@/lib/aiAudit";
 
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const rawDescription = body.description || "";
-    const description = sanitizeInput(rawDescription);
-    const area = sanitizeInput(body.area || "Cutting");
-    const domain = sanitizeInput(body.domain || "MQAA");
-    const severity = sanitizeInput(body.severity || "Medium");
-    const auditorNotes = sanitizeInput(body.auditorNotes || "");
+    const body = await req.json();
+    const { title, description, rootCause, severity, area, domain } = body;
 
-    if (!description || description.trim().length < 5) {
+    if (!rootCause || rootCause.trim() === "") {
       return NextResponse.json(
-        { success: false, error: "Deskripsi temuan minimal 5 karakter untuk dianalisis oleh AI." },
+        { 
+          success: false, 
+          error: "Mohon isi Akar Masalah (Root Cause) secara manual terlebih dahulu sebelum membuat Action Plan AI." 
+        },
         { status: 400 }
       );
     }
 
-    const result = await analyzeAuditFindingWithAi({
+    const actionPlan = await generateActionPlanFromRootCause({
+      title,
       description,
-      area,
-      domain,
+      rootCause,
       severity,
-      auditorNotes,
+      area,
+      domain
     });
 
     return NextResponse.json({
       success: true,
-      ...result,
+      data: {
+        actionPlan
+      }
     });
-  } catch (error) {
-    console.error("API audit analyze error:", error);
+
+  } catch (error: any) {
+    console.error("API Analyze Error:", error);
     return NextResponse.json(
-      { success: false, error: "Gagal menganalisis temuan audit dengan AI." },
+      { 
+        success: false, 
+        error: error?.message || "Gagal menghasilkan Action Plan dari AI." 
+      },
       { status: 500 }
     );
   }
