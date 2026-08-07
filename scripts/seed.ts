@@ -7,25 +7,26 @@ loadEnvConfig(path.join(process.cwd(), ".."));
 
 import { db } from "../src/db";
 import { users } from "../src/db/schema";
-import { scryptSync, randomBytes } from "crypto";
-
-function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const hashedPassword = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hashedPassword}`;
-}
+import { hashPassword } from "../src/lib/auth";
 
 async function main() {
   const defaultPassword = process.env.APP_PASSWORD || "admin123";
-  const hashedPassword = hashPassword(defaultPassword);
+  // Use the app's own hashPassword() so the stored hash is in the exact
+  // "scrypt:<salt>:<hash>" format that verifyPassword() in src/lib/auth.ts
+  // expects. A hand-rolled hash function here would produce a differently
+  // shaped string that fails every login attempt even with the right
+  // password.
+  const hashedPassword = await hashPassword(defaultPassword);
 
   console.log("Seeding admin user...");
-  
+
+  // Note: no "role" field here — the users table (src/db/schema.ts) only
+  // has id, name, email, password, and createdAt. This is a single-user
+  // app with no role/permission system.
   await db.insert(users).values({
     email: "admin@factory.com",
     name: "Admin Audit",
     password: hashedPassword,
-    role: "admin",
   }).onConflictDoNothing();
 
   console.log("✅ Admin user created/verified successfully!");
