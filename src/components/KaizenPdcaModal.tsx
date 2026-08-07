@@ -97,6 +97,13 @@ export function KaizenPdcaModal({
 
   // AI Action Plan Generator for Step 5 (Countermeasure / Action Plan)
   async function handleGenerateAiActionPlan() {
+    // Root Cause (5-Why, Step 3) is manual — AI uses it as input, it never
+    // determines it. Must be filled before the action plan can be generated.
+    if (!rootCause5Why || rootCause5Why.trim().length < 5) {
+      setErrorMsg('Isi "Root Cause (5-Why)" pada Step 3 terlebih dahulu (minimal 5 karakter) sebelum AI dapat menyusun Action Plan.');
+      return;
+    }
+
     setIsGeneratingAi(true);
     setErrorMsg("");
 
@@ -105,6 +112,8 @@ export function KaizenPdcaModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          title: projectTitle,
+          rootCause: rootCause5Why,
           description: problemSituation || findingDescription,
           area,
           severity: "High",
@@ -114,7 +123,13 @@ export function KaizenPdcaModal({
       const json = await res.json();
       if (json.success && json.actionPlan) {
         setActionPlan(json.actionPlan);
-        setSuccessMsg("Rencana aksi CAPA berhasil digenerate oleh Gemini AI! ✨");
+        if (json.aiEngine === "gemini") {
+          setSuccessMsg("Rencana aksi CAPA berhasil digenerate oleh Gemini AI! ✨");
+        } else if (json.aiEngine === "openai") {
+          setSuccessMsg("Rencana aksi CAPA berhasil digenerate (fallback OpenAI, Gemini tidak tersedia).");
+        } else {
+          setSuccessMsg("Rencana aksi CAPA digenerate via Rule Engine fallback — Gemini/OpenAI API key belum aktif di server.");
+        }
       } else {
         setErrorMsg(json.error || "Gagal menggenerate action plan.");
       }

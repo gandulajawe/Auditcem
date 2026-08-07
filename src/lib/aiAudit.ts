@@ -13,36 +13,42 @@ export interface ActionPlanRow {
 }
 
 export interface AuditAnalysisResult {
-  summary: string;
+  insightNote: string;
   actionPlanTable: ActionPlanRow[];
-  rootCause: string;
   actionPlan: string;
   issueCategory: IssueCategory;
+  aiEngine: "gemini" | "openai" | "fallback";
 }
 
+// IMPORTANT: Root Cause is ALWAYS determined manually by the auditor in the form.
+// The AI is a downstream consumer of that root cause — it must never invent or
+// overwrite it. Its only job is to turn (title + manual root cause + severity +
+// area + domain + description) into a concrete CAPA action plan.
 export const AI_SYSTEM_PROMPT = `Anda adalah Chief Quality & Safety Auditor senior berpengalaman di industri manufaktur sepatu (CEM Footwear Manufacturing).
 
-Analisislah temuan audit operasional berikut dan buatkan Rencana Tindakan Remediation (Corrective and Preventive Action / CAPA Table).
+Auditor SUDAH menentukan Root Cause (akar masalah) secara manual berdasarkan investigasi lapangan — root cause tersebut diberikan di bawah sebagai FAKTA yang TIDAK BOLEH Anda ubah, ganti, atau buat ulang. Tugas Anda HANYA menyusun Rencana Tindakan Remediation (Corrective and Preventive Action / CAPA Table) yang secara logis dan teknis menindaklanjuti root cause tersebut — bukan membuat root cause baru dari deskripsi temuan.
+
+Gunakan Judul Temuan, Root Cause manual, Severity, Area, Domain, dan Deskripsi Temuan sebagai konteks utama untuk merancang action plan yang spesifik dan relevan — bukan template generik.
 
 Selain itu, klasifikasikan temuan ke dalam SATU kategori masalah dari daftar tetap berikut (pilih yang paling sesuai, jangan buat kategori baru):
 ${ISSUE_CATEGORIES.map((c) => `- ${c}`).join("\n")}
 
 Hasilkan output JSON murni tanpa pembungkus markdown dengan format struktur persis seperti berikut:
 {
-  "summary": "Ringkasan singkat analisis akar masalah (1-2 kalimat)",
+  "insightNote": "Catatan singkat AI (1-2 kalimat) yang menghubungkan root cause manual dengan strategi action plan yang dipilih — BUKAN root cause baru",
   "issueCategory": "Salah satu nilai persis dari daftar kategori di atas",
   "actionPlanTable": [
     {
       "horizon": "Jangka Pendek",
       "category": "Corrective Action",
-      "action": "Deskripsi langkah perbaikan cepat yang konkret dan spesifik",
+      "action": "Deskripsi langkah perbaikan cepat yang konkret dan spesifik, menindaklanjuti root cause manual di atas",
       "rationale": "Justifikasi teknis mendalam mengapa langkah ini efektif menghentikan masalah saat ini",
       "targetSla": "Immediate / < 12 Jam / 24 Jam"
     },
     {
       "horizon": "Jangka Panjang",
       "category": "Preventive Action",
-      "action": "Deskripsi perbaikan sistem/SOP/maintenance jangka panjang",
+      "action": "Deskripsi perbaikan sistem/SOP/maintenance jangka panjang yang menghilangkan root cause manual di atas",
       "rationale": "Justifikasi teknis bagaimana langkah ini mencegah masalah terulang kembali di masa depan",
       "targetSla": "1 Minggu / 1 Bulan / Sesuai Siklus PM"
     }
@@ -50,27 +56,34 @@ Hasilkan output JSON murni tanpa pembungkus markdown dengan format struktur pers
 }`;
 
 export async function analyzeAuditFindingWithAi(params: {
+  title?: string;
+  rootCause: string;
   description: string;
   area: string;
   domain?: string;
   severity?: string;
   auditorNotes?: string;
 }): Promise<AuditAnalysisResult> {
+  const title = sanitizeInput(params.title || "");
+  const rootCause = sanitizeInput(params.rootCause || "");
   const description = sanitizeInput(params.description || "");
   const area = sanitizeInput(params.area || "Cutting");
   const domain = sanitizeInput(params.domain || "MQAA");
   const severity = sanitizeInput(params.severity || "Medium");
   const auditorNotes = sanitizeInput(params.auditorNotes || "");
 
+  const userPrompt = `Judul Temuan: ${title || "-"}
+Area Pabrik: ${area}
+Domain Audit: ${domain}
+Tingkat Keparahan (Severity): ${severity}
+Deskripsi Temuan: ${description}
+Root Cause (Akar Masalah) - DITENTUKAN MANUAL OLEH AUDITOR, JANGAN DIUBAH: ${rootCause}
+Catatan Auditor: ${auditorNotes || "-"}`;
+
   // 1. Try Google Gemini via @google/genai SDK
   if (process.env.GEMINI_API_KEY) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const userPrompt = `Area Pabrik: ${area}
-Domain Audit: ${domain}
-Tingkat Keparahan (Severity): ${severity}
-Deskripsi Temuan: ${description}
-Catatan Auditor: ${auditorNotes || "-"}`;
 
       const response = await ai.models.generateContent({
         model: getGeminiModel(),
@@ -82,7 +95,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
         const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanJson);
 
-        const summary = parsed.summary || "Analisis akar masalah temuan audit operasional.";
+        const insightNote = parsed.insightNote || parsed.summary || "";
         const actionPlanTable: ActionPlanRow[] = Array.isArray(parsed.actionPlanTable) ? parsed.actionPlanTable : [];
         const issueCategory: IssueCategory = ISSUE_CATEGORIES.includes(parsed.issueCategory)
           ? parsed.issueCategory
@@ -96,11 +109,11 @@ Catatan Auditor: ${auditorNotes || "-"}`;
           .join("\n\n");
 
         return {
-          summary,
+          insightNote,
           actionPlanTable,
-          rootCause: summary,
           actionPlan: formattedActionPlanText,
           issueCategory,
+          aiEngine: "gemini",
         };
       }
     } catch (e) {
@@ -121,7 +134,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
           model: "gpt-4o-mini",
           messages: [
             { role: "system", content: AI_SYSTEM_PROMPT },
-            { role: "user", content: `Area Pabrik: ${area}\nDomain Audit: ${domain}\nSeverity: ${severity}\nDeskripsi Temuan: ${description}` },
+            { role: "user", content: userPrompt },
           ],
           temperature: 0.7,
           response_format: { type: "json_object" },
@@ -132,7 +145,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
         const aiData = await aiResponse.json();
         const parsed = JSON.parse(aiData.choices[0].message.content);
 
-        const summary = parsed.summary || "Analisis akar masalah temuan audit operasional.";
+        const insightNote = parsed.insightNote || parsed.summary || "";
         const actionPlanTable: ActionPlanRow[] = Array.isArray(parsed.actionPlanTable) ? parsed.actionPlanTable : [];
         const issueCategory: IssueCategory = ISSUE_CATEGORIES.includes(parsed.issueCategory)
           ? parsed.issueCategory
@@ -146,11 +159,11 @@ Catatan Auditor: ${auditorNotes || "-"}`;
           .join("\n\n");
 
         return {
-          summary,
+          insightNote,
           actionPlanTable,
-          rootCause: summary,
           actionPlan: formattedActionPlanText,
           issueCategory,
+          aiEngine: "openai",
         };
       }
     } catch (e) {
@@ -158,14 +171,15 @@ Catatan Auditor: ${auditorNotes || "-"}`;
     }
   }
 
-  // 3. Rule Engine Fallback
-  const lowerDesc = description.toLowerCase();
-  let summary = "";
+  // 3. Rule Engine Fallback — now anchored on the manual root cause + title,
+  // not just description keywords, so it varies with what the auditor typed.
+  const lowerContext = `${rootCause} ${description} ${title}`.toLowerCase();
+  let insightNote = "";
   let actionPlanTable: ActionPlanRow[] = [];
   const issueCategory: IssueCategory = suggestIssueCategory(description);
 
-  if (lowerDesc.includes("suhu") || lowerDesc.includes("oven") || lowerDesc.includes("panas") || lowerDesc.includes("lem") || lowerDesc.includes("cement")) {
-    summary = "Variasi suhu oven aktivasi lem dan penurunan viskositas primer disebabkan oleh deposit uap lem pada thermo-sensor dan penguapan solvent pada wadah terbuka.";
+  if (lowerContext.includes("suhu") || lowerContext.includes("oven") || lowerContext.includes("panas") || lowerContext.includes("lem") || lowerContext.includes("cement")) {
+    insightNote = "Action plan disusun menindaklanjuti root cause manual terkait suhu/viskositas proses lem yang diinput auditor.";
     actionPlanTable = [
       {
         horizon: "Jangka Pendek",
@@ -189,8 +203,8 @@ Catatan Auditor: ${auditorNotes || "-"}`;
         targetSla: "1 Minggu",
       },
     ];
-  } else if (lowerDesc.includes("cutting") || lowerDesc.includes("potong") || lowerDesc.includes("pisau") || lowerDesc.includes("die") || lowerDesc.includes("kulit")) {
-    summary = "Kerusakan tepi bahan potongan disebabkan oleh tumpulnya mata pisau die cutter dan landasan cutting pad yang bergelombang akibat keterlambatan jadwal pemeliharaan rutin.";
+  } else if (lowerContext.includes("cutting") || lowerContext.includes("potong") || lowerContext.includes("pisau") || lowerContext.includes("die") || lowerContext.includes("kulit")) {
+    insightNote = "Action plan disusun menindaklanjuti root cause manual terkait mata pisau/cutting pad yang diinput auditor.";
     actionPlanTable = [
       {
         horizon: "Jangka Pendek",
@@ -215,19 +229,23 @@ Catatan Auditor: ${auditorNotes || "-"}`;
       },
     ];
   } else {
-    summary = `Penyimpangan operasional di area ${area} dipicu oleh ketidaksesuaian prosedur operasional standar dan belum optimalnya pengawasan mutu secara berkala.`;
+    // Generic branch — now weaves in the auditor's actual root cause text
+    // instead of a static boilerplate sentence, so two different findings
+    // no longer produce byte-identical output.
+    const rootCauseSnippet = rootCause || "penyimpangan prosedur operasional standar";
+    insightNote = `Action plan disusun menindaklanjuti root cause manual: "${rootCauseSnippet}".`;
     actionPlanTable = [
       {
         horizon: "Jangka Pendek",
         category: "Corrective Action",
-        action: `Lakukan isolasi lot material terdampak di area ${area} dan penyesuaian instrumen kerja secara langsung oleh supervisor shift.`,
-        rationale: "Tindakan penahanan cepat (containment) mencegah merambatnya cacat ke stasiun kerja berikutnya di jalur perakitan.",
+        action: `Lakukan isolasi lot/area terdampak terkait "${rootCauseSnippet}" di area ${area}, dan penyesuaian instrumen kerja secara langsung oleh supervisor shift.`,
+        rationale: "Tindakan penahanan cepat (containment) mencegah merambatnya dampak root cause ke stasiun kerja berikutnya di jalur produksi.",
         targetSla: "Immediate / < 12 Jam",
       },
       {
         horizon: "Jangka Panjang",
         category: "Preventive Action",
-        action: `Perbarui Standard Operation Sheet (SOS) area ${area}, integrasikan papan visual kontrol Andon, dan lakukan pemeliharaan preventif terjadwal.`,
+        action: `Perbarui Standard Operation Sheet (SOS) area ${area} untuk menutup akar masalah "${rootCauseSnippet}", integrasikan papan visual kontrol Andon, dan lakukan pemeliharaan preventif terjadwal.`,
         rationale: "Pencegahan sistemik menghilangkan variabilitas metode kerja operator dan memastikan parameter proses stabil jangka panjang.",
         targetSla: "1 Minggu",
       },
@@ -242,10 +260,10 @@ Catatan Auditor: ${auditorNotes || "-"}`;
     .join("\n\n");
 
   return {
-    summary,
+    insightNote,
     actionPlanTable,
-    rootCause: summary,
     actionPlan: formattedActionPlanText,
     issueCategory,
+    aiEngine: "fallback",
   };
 }
