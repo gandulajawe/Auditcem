@@ -302,6 +302,13 @@ export function AuditReportBuilder({
       return;
     }
 
+    // Root Cause is manual-only now: AI needs it as input to build the Action
+    // Plan, it never determines or overwrites it. So it must be filled first.
+    if (!finding.rootCause || finding.rootCause.trim().length < 5) {
+      setFormError("Isi \"1. Root Cause Analysis (Akar Masalah)\" secara manual terlebih dahulu (minimal 5 karakter). AI akan memakai root cause ini untuk menyusun Action Plan — AI tidak lagi menentukan root cause.");
+      return;
+    }
+
     setAnalyzingFindingId(findingId);
     setFormError("");
 
@@ -310,6 +317,8 @@ export function AuditReportBuilder({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          title: finding.title,
+          rootCause: finding.rootCause,
           description: finding.findingDescription,
           area: formHeader.area,
           domain: formHeader.domain,
@@ -320,21 +329,14 @@ export function AuditReportBuilder({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        const aiRootCause = data.rootCause || data.summary || "";
+        // Root Cause is never touched here anymore — only Action Plan (and
+        // the suggested issue category) come back from the AI.
         const aiActionPlan = data.actionPlan || "";
 
-        const filledFieldsToOverwrite: string[] = [];
-        if (aiRootCause && finding.rootCause.trim().length > 0 && finding.rootCause.trim() !== aiRootCause.trim()) {
-          filledFieldsToOverwrite.push("Root Cause Analysis");
-        }
-        if (aiActionPlan && finding.actionPlan.trim().length > 0 && finding.actionPlan.trim() !== aiActionPlan.trim()) {
-          filledFieldsToOverwrite.push("Action Plan Remediasi (CAPA)");
-        }
-
         let allowOverwrite = true;
-        if (filledFieldsToOverwrite.length > 0) {
+        if (aiActionPlan && finding.actionPlan.trim().length > 0 && finding.actionPlan.trim() !== aiActionPlan.trim()) {
           allowOverwrite = window.confirm(
-            `Field berikut sudah diisi manual:\n- ${filledFieldsToOverwrite.join("\n- ")}\n\nTimpa dengan hasil AI? (Klik Cancel untuk mempertahankan isian manual, field lain yang masih kosong tetap akan diisi AI)`
+            `"Action Plan Remediasi (CAPA)" sudah diisi manual.\n\nTimpa dengan hasil AI yang disusun berdasarkan Root Cause manual Anda? (Klik Cancel untuk mempertahankan isian manual)`
           );
         }
 
@@ -343,10 +345,6 @@ export function AuditReportBuilder({
             if (f.id !== findingId) return f;
             return {
               ...f,
-              rootCause:
-                aiRootCause && (allowOverwrite || f.rootCause.trim().length === 0)
-                  ? aiRootCause
-                  : f.rootCause,
               actionPlan:
                 aiActionPlan && (allowOverwrite || f.actionPlan.trim().length === 0)
                   ? aiActionPlan
@@ -355,6 +353,14 @@ export function AuditReportBuilder({
             };
           })
         );
+
+        if (data.aiEngine && data.aiEngine !== "gemini") {
+          setFormError(
+            data.aiEngine === "openai"
+              ? "Catatan: Action plan digenerate lewat OpenAI fallback (Gemini tidak tersedia/gagal)."
+              : "Catatan: Action plan digenerate lewat Rule Engine fallback (Gemini & OpenAI API key tidak tersedia atau gagal dipanggil). Cek env var GEMINI_API_KEY di Vercel & log deployment untuk hasil AI generatif penuh."
+          );
+        }
       } else {
         setFormError(data.error || "Gagal menganalisis temuan dengan AI.");
       }
