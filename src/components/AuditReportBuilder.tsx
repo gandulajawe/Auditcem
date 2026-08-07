@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileText, Plus, Search, AlertTriangle, CheckCircle, Clock, Trash2, ChevronDown, ChevronUp, UserCheck, Calendar, Sparkles, Download, CheckCircle2, Edit3, Image as ImageIcon, X, Eye, Target, GraduationCap, ShieldCheck, TrendingUp, Hash, Layers } from "lucide-react";
 import { DomainBadge } from "./DomainBadge";
 import { AreaType } from "./AuditAreaScope";
+import { ISSUE_CATEGORIES } from "@/lib/issueCategories";
 import { formatIndonesianDate } from "@/lib/dateUtils";
 import { generateSingleReportPDF } from "@/lib/pdfGenerator";
 import { KaizenPdcaModal } from "./KaizenPdcaModal";
@@ -27,6 +28,7 @@ export interface AuditReportItem {
   area: string; // Strictly 'Cutting', 'Prep', 'CSC'
   lineNumber?: string | null; // Optional 'Line 02, Mesin Clicker #4'
   domain: string; // 'MQAA', '6S', 'Visual Management', 'HSE', 'PS'
+  issueCategory?: string | null; // Kategori masalah untuk analisis Pareto 80/20
   findingDescription: string;
   rootCause: string; // Required column 1
   actionPlan: string; // Required column 2
@@ -44,6 +46,7 @@ export interface AuditReportItem {
 interface SingleFindingFormField {
   id: string;
   title: string;
+  issueCategory: string;
   findingDescription: string;
   rootCause: string;
   actionPlan: string;
@@ -55,7 +58,6 @@ interface SingleFindingFormField {
 interface AuditReportBuilderProps {
   reports: AuditReportItem[];
   selectedAreaFilter: AreaType;
-  onAddReport: (reportData: Omit<AuditReportItem, "id">) => Promise<AuditReportItem | void>;
   onUpdateReport: (id: number, reportData: Partial<AuditReportItem>) => Promise<void>;
   onUpdateReportStatus: (id: number, newStatus: string) => Promise<void>;
   onDeleteReport: (id: number) => Promise<void>;
@@ -64,7 +66,6 @@ interface AuditReportBuilderProps {
 export function AuditReportBuilder({
   reports,
   selectedAreaFilter,
-  onAddReport,
   onUpdateReport,
   onUpdateReportStatus,
   onDeleteReport,
@@ -111,6 +112,7 @@ export function AuditReportBuilder({
     {
       id: "f-1",
       title: "",
+      issueCategory: "",
       findingDescription: "",
       rootCause: "",
       actionPlan: "",
@@ -157,6 +159,7 @@ export function AuditReportBuilder({
       {
         id: `f-${Date.now()}`,
         title: "",
+        issueCategory: "",
         findingDescription: "",
         rootCause: "",
         actionPlan: "",
@@ -184,6 +187,7 @@ export function AuditReportBuilder({
       {
         id: `f-${report.id}`,
         title: report.title,
+        issueCategory: report.issueCategory || "",
         findingDescription: report.findingDescription,
         rootCause: report.rootCause,
         actionPlan: report.actionPlan,
@@ -203,6 +207,7 @@ export function AuditReportBuilder({
       {
         id: `f-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: "",
+        issueCategory: "",
         findingDescription: "",
         rootCause: "",
         actionPlan: "",
@@ -322,6 +327,7 @@ export function AuditReportBuilder({
                   ...f,
                   rootCause: data.rootCause || data.summary || f.rootCause,
                   actionPlan: data.actionPlan || f.actionPlan,
+                  issueCategory: data.issueCategory || f.issueCategory,
                 }
               : f
           )
@@ -365,6 +371,7 @@ export function AuditReportBuilder({
           area: formHeader.area,
           lineNumber: formHeader.lineNumber,
           domain: formHeader.domain,
+          issueCategory: singleFinding.issueCategory || null,
           findingDescription: singleFinding.findingDescription,
           rootCause: singleFinding.rootCause,
           actionPlan: singleFinding.actionPlan,
@@ -395,6 +402,7 @@ export function AuditReportBuilder({
             auditDate: formHeader.auditDate,
             findings: formFindings.map((f) => ({
               title: f.title || `Temuan Audit ${formHeader.area} ${formHeader.lineNumber ? `(${formHeader.lineNumber})` : ""}`,
+              issueCategory: f.issueCategory || null,
               findingDescription: f.findingDescription,
               rootCause: f.rootCause,
               actionPlan: f.actionPlan,
@@ -581,6 +589,12 @@ export function AuditReportBuilder({
                       )}
 
                       <DomainBadge domain={report.domain} size="sm" />
+                      {report.issueCategory && (
+                        <span className="px-2.5 py-0.5 bg-slate-50 text-slate-600 font-bold text-[10px] rounded-md border border-slate-200 flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-slate-500" />
+                          {report.issueCategory}
+                        </span>
+                      )}
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getSeverityBadge(report.severity)}`}>
                         {report.severity} Severity
                       </span>
@@ -834,6 +848,7 @@ export function AuditReportBuilder({
           findingDescription={activeKaizenFinding.findingDescription}
           aiRootCause={activeKaizenFinding.aiRootCause}
           area={activeKaizenFinding.area}
+          projectTitle={activeKaizenFinding.title}
           onClose={() => setActiveKaizenFinding(null)}
           onSaveSuccess={() => {
             onUpdateReportStatus(activeKaizenFinding.id, "In Progress");
@@ -1070,6 +1085,25 @@ export function AuditReportBuilder({
                         className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-800"
                         required
                       />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                        Kategori Masalah (untuk Analisis Pareto 80/20)
+                      </label>
+                      <select
+                        value={finding.issueCategory}
+                        onChange={(e) => handleFindingFieldChange(finding.id, "issueCategory", e.target.value)}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-indigo-500 text-slate-800"
+                      >
+                        <option value="">Pilih kategori (atau biarkan AI menyarankan)</option>
+                        {ISSUE_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="space-y-1">

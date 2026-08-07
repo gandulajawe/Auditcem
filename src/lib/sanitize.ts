@@ -1,33 +1,28 @@
 // File: src/lib/sanitize.ts
+import DOMPurify from "isomorphic-dompurify";
 
 /**
- * Sanitizes input data recursively to prevent XSS attacks.
- * Strips dangerous HTML tags (<script>, <iframe>, <object>, <embed>), inline handlers,
- * javascript: and data:text/html schemes.
+ * Sanitizes input data to prevent XSS attacks.
+ *
+ * Uses DOMPurify (a real HTML parser, via isomorphic-dompurify so it also
+ * runs server-side under Node) instead of hand-written regexes. Every field
+ * sanitized here (finding descriptions, root cause, action plans, etc.) is
+ * meant to be plain text, so we configure DOMPurify to strip ALL tags and
+ * attributes — output is text content only, with no HTML surviving at all.
+ * This closes bypasses that regex-based stripping is prone to (nested or
+ * obfuscated markup, unusual attribute spacing/casing, HTML entity tricks,
+ * malformed-but-browser-tolerant tag soup), because DOMPurify actually
+ * parses the DOM tree rather than pattern-matching text.
  */
 export function sanitizeString(input: string, maxLength: number = 2000): string {
   if (typeof input !== "string") return "";
 
-  let sanitized = input
-    // Remove script tags and content
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    // Remove iframe tags and content
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
-    // Remove object tags and content
-    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
-    // Remove embed tags and content
-    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
-    // Remove inline event handlers
-    .replace(/on\w+="[^"]*"/gi, "")
-    .replace(/on\w+='[^']*'/gi, "")
-    .replace(/on\w+=\w+/gi, "")
-    // Remove javascript: URLs
-    .replace(/javascript:[^\s"']*/gi, "")
-    // Remove data:text/html URLs
-    .replace(/data:text\/html[^\s"']*/gi, "")
-    // Strip remaining HTML tags
-    .replace(/<[^>]*>?/gm, "")
-    // Remove null bytes
+  let sanitized = DOMPurify.sanitize(input, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  })
+    // DOMPurify with no allowed tags returns text content only, but we still
+    // strip stray null bytes and normalize whitespace defensively.
     .replace(/\0/g, "")
     .trim();
 

@@ -25,23 +25,25 @@ export default function NewAuditPage() {
   }
 
   useEffect(() => {
-    loadReports();
-  }, []);
+    let ignore = false;
 
-  async function handleAddReport(reportData: Omit<AuditReportItem, "id">) {
-    const res = await fetch("/api/reports", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reportData),
-    });
-    const data = await res.json();
-    if (data.success) {
-      loadReports();
-      return data.data;
-    } else {
-      throw new Error(data.error || "Gagal menyimpan laporan.");
-    }
-  }
+    (async () => {
+      const res = await fetch("/api/reports");
+      const json = await res.json();
+      if (ignore) return;
+      if (json.success && Array.isArray(json.data)) {
+        setReports(json.data);
+      }
+    })()
+      .catch((err) => console.error("Failed to load reports:", err))
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   async function handleUpdateReport(id: number, reportData: Partial<AuditReportItem>) {
     const res = await fetch("/api/reports", {
@@ -97,7 +99,6 @@ export default function NewAuditPage() {
           <AuditReportBuilder
             reports={reports}
             selectedAreaFilter="All"
-            onAddReport={handleAddReport}
             onUpdateReport={handleUpdateReport}
             onUpdateReportStatus={handleUpdateReportStatus}
             onDeleteReport={handleDeleteReport}

@@ -1,107 +1,72 @@
 // File: src/app/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { HeaderHero } from "@/components/HeaderHero";
-import { AuditAreaScope, AreaType } from "@/components/AuditAreaScope";
-import { ThreeMonthTimeline, ChecklistItem } from "@/components/ThreeMonthTimeline";
-import { WeeklyCadenceSection } from "@/components/WeeklyCadenceSection";
-import { AuditReportBuilder, AuditReportItem } from "@/components/AuditReportBuilder";
-import { DownloadResumeSection } from "@/components/DownloadResumeSection";
-import { SummaryDashboard } from "@/components/SummaryDashboard";
 import {
   Menu,
-  Bell,
   FileText,
   RefreshCw,
   Calendar,
   BarChart3,
+  ListChecks,
   AlertTriangle,
   Wifi,
   WifiOff,
-  CheckCircle2,
   Sparkles,
   ArrowRight,
   TrendingUp,
   X,
+  Presentation,
+  LogOut,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
-  const [reports, setReports] = useState<AuditReportItem[]>([]);
-  
-  const [selectedAreaFilter, setSelectedAreaFilter] = useState<AreaType>("All");
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // App Grid Active Tab
-  const [activeTab, setActiveTab] = useState<"home" | "audit" | "kaizen" | "cadence" | "analytics">("home");
 
   // Mobile Menu Drawer State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Online / Offline Status State
-  const [isOnline, setIsOnline] = useState(true);
-  const [draftCount, setDraftCount] = useState(2);
+  // Online / Offline Status State (status nyata dari browser)
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
-  };
-
-  const loadData = useCallback(async (isSilent = false) => {
-    if (!isSilent) setIsLoading(true);
-    else setIsRefreshing(true);
-
-    try {
-      const [resChecklists, resReports] = await Promise.all([
-        fetch("/api/checklists"),
-        fetch("/api/reports"),
-      ]);
-
-      if (resChecklists.status === 401 || resReports.status === 401) {
-        router.push("/login");
-        return;
-      }
-
-      const dataChecklists = await resChecklists.json();
-      const dataReports = await resReports.json();
-
-      if (dataChecklists.success) setChecklists(dataChecklists.data);
-      if (dataReports.success) setReports(dataReports.data);
-    } catch (error) {
-      console.error("Failed to load dashboard data:", error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [router]);
-
+  // Home is now just a launcher — heavy data & widgets live on each sub-page.
+  // We still verify the session so a logged-out user gets bounced to /login.
   useEffect(() => {
-    loadData();
+    let ignore = false;
 
-    // Online / Offline Listeners
+    (async () => {
+      try {
+        const res = await fetch("/api/checklists");
+        if (ignore) return;
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to verify session:", error);
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    })();
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    setIsOnline(navigator.onLine);
-
     return () => {
+      ignore = true;
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [loadData]);
+  }, [router]);
 
-  // Auth Logout Handler
   async function handleLogout() {
     try {
       await fetch("/api/login", { method: "DELETE" });
@@ -112,191 +77,12 @@ export default function DashboardPage() {
     }
   }
 
-  // Checklist Handlers
-  async function handleToggleChecklist(id: number, currentStatus: boolean) {
-    const nextCompleted = !currentStatus;
-    setChecklists((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, completed: nextCompleted } : c))
-    );
-
-    try {
-      const res = await fetch("/api/checklists", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, completed: nextCompleted }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setChecklists((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, completed: currentStatus } : c))
-        );
-        showToast("Gagal memperbarui status checklist.");
-      } else {
-        showToast(nextCompleted ? "Checklist ditandai selesai! ✓" : "Status checklist diperbarui.");
-      }
-    } catch {
-      setChecklists((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, completed: currentStatus } : c))
-      );
-      showToast("Terjadi kesalahan jaringan.");
-    }
-  }
-
-  async function handleAddChecklist(newItem: {
-    month: string;
-    domain: string;
-    title: string;
-    description: string;
-    area: string;
-    auditDate?: string | null;
-  }) {
-    try {
-      const res = await fetch("/api/checklists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newItem),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setChecklists((prev) => [...prev, data.data]);
-        showToast("Item checklist berhasil ditambahkan.");
-      } else {
-        showToast(data.error || "Gagal menambah checklist.");
-      }
-    } catch {
-      showToast("Terjadi kesalahan server.");
-    }
-  }
-
-  async function handleEditChecklist(
-    id: number,
-    updatedItem: { month: string; domain: string; title: string; description: string; area: string; auditDate?: string | null }
-  ) {
-    try {
-      const res = await fetch("/api/checklists", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...updatedItem }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setChecklists((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, ...data.data } : c))
-        );
-        showToast("Item checklist berhasil diperbarui.");
-      } else {
-        showToast(data.error || "Gagal memperbarui checklist.");
-      }
-    } catch {
-      showToast("Terjadi kesalahan koneksi.");
-    }
-  }
-
-  async function handleDeleteChecklist(id: number) {
-    try {
-      const res = await fetch(`/api/checklists?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        setChecklists((prev) => prev.filter((c) => c.id !== id));
-        showToast("Checklist berhasil dihapus.");
-      } else {
-        showToast(data.error || "Gagal menghapus.");
-      }
-    } catch {
-      showToast("Gagal menghapus checklist.");
-    }
-  }
-
-  // Audit Report Handlers
-  async function handleAddReport(reportData: Omit<AuditReportItem, "id">): Promise<AuditReportItem | void> {
-    const res = await fetch("/api/reports", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reportData),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setReports((prev) => [data.data, ...prev]);
-      showToast("Laporan audit berhasil disimpan!");
-      return data.data;
-    } else {
-      throw new Error(data.error || "Gagal menyimpan laporan.");
-    }
-  }
-
-  async function handleUpdateReport(id: number, reportData: Partial<AuditReportItem>) {
-    const res = await fetch("/api/reports", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...reportData }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setReports((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, ...data.data } : r))
-      );
-      showToast("Laporan audit berhasil diperbarui!");
-    } else {
-      throw new Error(data.error || "Gagal memperbarui laporan.");
-    }
-  }
-
-  async function handleUpdateReportStatus(id: number, newStatus: string) {
-    setReports((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
-    );
-
-    try {
-      const res = await fetch("/api/reports", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status: newStatus }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        loadData(true);
-        showToast("Gagal mengupdate status laporan.");
-      } else {
-        showToast(`Status laporan diubah menjadi: ${newStatus}`);
-      }
-    } catch {
-      loadData(true);
-      showToast("Koneksi bermasalah.");
-    }
-  }
-
-  async function handleDeleteReport(id: number) {
-    try {
-      const res = await fetch(`/api/reports?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        setReports((prev) => prev.filter((r) => r.id !== id));
-        showToast("Laporan audit berhasil dihapus.");
-      } else {
-        showToast(data.error || "Gagal menghapus laporan.");
-      }
-    } catch {
-      showToast("Gagal menghapus laporan.");
-    }
-  }
-
-  // Count reports by area (Cutting, Prep, CSC)
-  const reportCounts = {
-    Cutting: reports.filter((r) => r.area === "Cutting").length,
-    Prep: reports.filter((r) => r.area === "Prep").length,
-    CSC: reports.filter((r) => r.area === "CSC").length,
-    All: reports.length,
-  };
-
-  const totalChecklistCount = checklists.length;
-  const completedChecklistCount = checklists.filter((c) => c.completed).length;
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-6 space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm font-extrabold text-indigo-600 tracking-wide animate-pulse">
-          Memuat Dashboard Audit Crucible...
+          Memuat Audit Crucible...
         </p>
       </div>
     );
@@ -304,14 +90,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-20 space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-14 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold animate-bounce border border-slate-700/50">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* HEADER NAVBAR (MOBILE FIRST) */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 shadow-2xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -331,19 +109,15 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Right: Notification Bell Icon with Badge */}
-          <div className="relative">
-            <button
-              onClick={() => showToast("3 Tugas Kaizen & Audit Mendesak Perlu Tindakan!")}
-              className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer relative"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-600 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white animate-pulse">
-                3
-              </span>
-            </button>
-          </div>
+          {/* Right: Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+            aria-label="Keluar dari sesi"
+            title="Keluar dari sesi auditor"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </header>
 
@@ -355,11 +129,11 @@ export default function DashboardPage() {
             <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 text-xs font-bold">Tutup ✕</button>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-            <button onClick={() => { setActiveTab("home"); setIsMobileMenuOpen(false); }} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
-              🏠 Home App Grid
-            </button>
             <Link href="/audit/new" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
               📝 Buat Audit Baru
+            </Link>
+            <Link href="/checklist" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
+              ✅ Checklist 3 Bulan
             </Link>
             <Link href="/kaizen" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
               🔄 Kaizen PDCA
@@ -367,8 +141,11 @@ export default function DashboardPage() {
             <Link href="/cadence" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
               📅 Weekly Cadence
             </Link>
-            <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left col-span-2">
+            <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left">
               📊 Dashboard & PDF Generator
+            </Link>
+            <Link href="/presentation" onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-xl text-left col-span-2">
+              🖥️ Generate PPT (AI Gemini)
             </Link>
           </div>
         </div>
@@ -393,7 +170,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* MENU UTAMA (APP GRID - MOBILE FIRST: grid-cols-2 HP, grid-cols-4 Tablet/Desktop) */}
+        {/* MENU UTAMA (APP GRID - MOBILE FIRST: grid-cols-2 HP, grid-cols-3 Tablet/Desktop) */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
@@ -402,7 +179,7 @@ export default function DashboardPage() {
             <span className="text-[10px] text-indigo-600 font-bold">Mobile First Grid</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card 1: BUAT AUDIT BARU */}
             <Link
               href="/audit/new"
@@ -428,7 +205,32 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Card 2: KAIZEN PDCA */}
+            {/* Card 2: CHECKLIST 3 BULAN */}
+            <Link
+              href="/checklist"
+              className="group bg-white hover:bg-teal-50/50 p-5 rounded-3xl border border-slate-200/80 hover:border-teal-300 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 cursor-pointer"
+            >
+              <div className="p-3 bg-teal-100 text-teal-700 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <ListChecks className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Program Checklist
+                </span>
+                <h3 className="text-sm font-black text-slate-800 group-hover:text-teal-600 transition-colors">
+                  CHECKLIST 3 BULAN
+                </h3>
+                <p className="text-[11px] text-slate-500 line-clamp-2">
+                  Checklist bertahap Agustus–Oktober per area audit.
+                </p>
+              </div>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-teal-600">
+                <span>/checklist</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+
+            {/* Card 3: KAIZEN PDCA */}
             <Link
               href="/kaizen"
               className="group bg-white hover:bg-purple-50/50 p-5 rounded-3xl border border-slate-200/80 hover:border-purple-300 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 cursor-pointer"
@@ -453,7 +255,7 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Card 3: WEEKLY CADENCE */}
+            {/* Card 4: WEEKLY CADENCE */}
             <Link
               href="/cadence"
               className="group bg-white hover:bg-emerald-50/50 p-5 rounded-3xl border border-slate-200/80 hover:border-emerald-300 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 cursor-pointer"
@@ -478,7 +280,7 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Card 4: DASHBOARD & PDF */}
+            {/* Card 5: DASHBOARD & PDF */}
             <Link
               href="/analytics"
               className="group bg-white hover:bg-amber-50/50 p-5 rounded-3xl border border-slate-200/80 hover:border-amber-300 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 cursor-pointer"
@@ -499,6 +301,31 @@ export default function DashboardPage() {
               </div>
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-amber-600">
                 <span>/analytics</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+
+            {/* Card 6: GENERATE PPT (AI GEMINI) */}
+            <Link
+              href="/presentation"
+              className="group bg-white hover:bg-indigo-50/50 p-5 rounded-3xl border border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 cursor-pointer"
+            >
+              <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <Presentation className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  AI-Powered Export
+                </span>
+                <h3 className="text-sm font-black text-slate-800 group-hover:text-indigo-600 transition-colors">
+                  GENERATE PPT
+                </h3>
+                <p className="text-[11px] text-slate-500 line-clamp-2">
+                  Outline slide otomatis via AI Gemini dari data audit & Kaizen.
+                </p>
+              </div>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-600">
+                <span>/presentation</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>
@@ -536,71 +363,22 @@ export default function DashboardPage() {
             </Link>
           </div>
         </section>
-
-        {/* SUBVIEW SECTIONS FOR COMPLETE INTEGRATION ON HOMEPAGE */}
-        <div className="space-y-8 pt-4">
-          <HeaderHero
-            totalChecklists={totalChecklistCount}
-            completedChecklists={completedChecklistCount}
-            onLogout={handleLogout}
-          />
-
-          <AuditAreaScope
-            selectedArea={selectedAreaFilter}
-            onSelectArea={setSelectedAreaFilter}
-            reportCounts={reportCounts}
-          />
-
-          <SummaryDashboard checklists={checklists} reports={reports} />
-
-          <ThreeMonthTimeline
-            checklists={checklists}
-            selectedAreaFilter={selectedAreaFilter}
-            onToggleChecklist={handleToggleChecklist}
-            onAddChecklist={handleAddChecklist}
-            onEditChecklist={handleEditChecklist}
-            onDeleteChecklist={handleDeleteChecklist}
-          />
-
-          <WeeklyCadenceSection />
-
-          <DownloadResumeSection checklists={checklists} reports={reports} />
-
-          <AuditReportBuilder
-            reports={reports}
-            selectedAreaFilter={selectedAreaFilter}
-            onAddReport={handleAddReport}
-            onUpdateReport={handleUpdateReport}
-            onUpdateReportStatus={handleUpdateReportStatus}
-            onDeleteReport={handleDeleteReport}
-          />
-        </div>
       </main>
 
-      {/* STATUS BAR AT VERY BOTTOM */}
+      {/* STATUS BAR AT VERY BOTTOM (Online/Offline saja — ini status nyata dari browser) */}
       <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Left: Online / Offline Indicator */}
-          <div className="flex items-center gap-2">
-            {isOnline ? (
-              <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-[11px] border border-emerald-200">
-                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Online (Terhubung Server)</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full text-[11px] border border-rose-200">
-                <WifiOff className="w-3.5 h-3.5 text-rose-600" />
-                <span>Offline (Mode Lokal)</span>
-              </span>
-            )}
-          </div>
-
-          {/* Right: Draft Count */}
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold">
-            <span className="px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200">
-              Draft Tersimpan: <strong>{draftCount} Item</strong>
+        <div className="max-w-7xl mx-auto flex items-center">
+          {isOnline ? (
+            <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-[11px] border border-emerald-200">
+              <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Online (Terhubung Server)</span>
             </span>
-          </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full text-[11px] border border-rose-200">
+              <WifiOff className="w-3.5 h-3.5 text-rose-600" />
+              <span>Offline (Mode Lokal)</span>
+            </span>
+          )}
         </div>
       </footer>
     </div>

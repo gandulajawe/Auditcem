@@ -5,6 +5,22 @@ import { ShieldCheck, Sparkles, Eye, HardHat, Cog, Tag } from "lucide-react";
 
 export type DomainType = "MQAA" | "6S" | "Visual Management" | "HSE" | "PS" | string;
 
+export const ALL_DOMAINS: string[] = ["MQAA", "6S", "Visual Management", "HSE", "PS"];
+
+/**
+ * Menormalkan nama domain apa pun (beda kapitalisasi/spasi) ke salah satu
+ * dari 5 domain baku di ALL_DOMAINS jika cocok. Dipakai saat pengelompokan
+ * (analytics per-domain, PDF resume) agar data lama yang tersimpan dengan
+ * kapitalisasi berbeda (mis. "mqaa") tidak dianggap domain terpisah.
+ * Jika tidak cocok dengan domain baku manapun, kembalikan string aslinya (trimmed).
+ */
+export function normalizeDomainName(domain: string): string {
+  const trimmed = (domain || "").trim();
+  const norm = trimmed.toLowerCase();
+  const match = ALL_DOMAINS.find((d) => d.toLowerCase() === norm);
+  return match || trimmed;
+}
+
 interface DomainBadgeProps {
   domain: DomainType;
   showIcon?: boolean;

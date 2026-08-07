@@ -65,7 +65,7 @@ export default function LoginPage() {
               The Audit Crucible
             </h1>
             <p className="text-sm text-gray-500 font-medium mt-1">
-              Fase Bulan 4 - 6 | Portal Autentikasi User & Auditor
+              Fase Bulan 4 - 6 | Dashboard Pribadi Audit CEM
             </p>
           </div>
         </div>
@@ -74,9 +74,9 @@ export default function LoginPage() {
         <div className="bg-[#FAF7FB] border border-[#F2A7C6]/60 rounded-2xl p-3.5 text-xs text-gray-600 flex items-start gap-2.5">
           <ShieldCheck className="w-5 h-5 text-[#6A0DAD] shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-gray-800">Sistem Autentikasi RBAC Database</p>
+            <p className="font-semibold text-gray-800">Login Aman</p>
             <p className="text-gray-500 mt-0.5">
-              Terenkripsi cookie JWT httpOnly. Terproteksi rate-limiting DB & RBAC per user.
+              Password terenkripsi (scrypt) & cookie sesi httpOnly.
             </p>
           </div>
         </div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700 tracking-wide uppercase">
-              Email Akun User
+              Email
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -104,7 +104,7 @@ export default function LoginPage() {
 
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700 tracking-wide uppercase">
-              Kata Sandi Akses
+              Password
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -159,9 +159,6 @@ export default function LoginPage() {
         <div className="pt-2 border-t border-gray-100 text-center space-y-1">
           <p className="text-[11px] text-gray-500 font-medium">
             Certified Engineering Manager (CEM) — Program Audit Sepatu On-Site
-          </p>
-          <p className="text-[10px] text-gray-400">
-            Akun Default: admin@factory.com (Role: Admin)
           </p>
         </div>
       </div>

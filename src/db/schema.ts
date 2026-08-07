@@ -7,73 +7,8 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").default("auditor").notNull(), // 'admin', 'auditor', 'viewer'
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-
-// Tabel audits (Header)
-export const audits = pgTable("audits", {
-  id: serial("id").primaryKey(),
-  area: text("area").notNull(), // 'Cutting', 'Prep', 'CSC'
-  lineNumber: text("line_number").notNull(), // Input Line / Nomor Mesin
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Tabel audit_findings (Detail - berelasi One-to-Many ke audits)
-export const auditFindings = pgTable("audit_findings", {
-  id: serial("id").primaryKey(),
-  auditId: integer("audit_id")
-    .notNull()
-    .references(() => audits.id, { onDelete: "cascade" }),
-  findingDescription: text("finding_description").notNull(),
-  aiRootCause: text("ai_root_cause"),
-  aiCapa: text("ai_capa"),
-  isKaizenEscalated: boolean("is_kaizen_escalated").default(false).notNull(), // Checkbox Eskalasi Kaizen
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Tabel kaizen_pdca (Lembar Kaizen 8 Langkah - One-to-One dengan audit_findings)
-export const kaizenPdca = pgTable("kaizen_pdca", {
-  id: serial("id").primaryKey(),
-  findingId: integer("finding_id")
-    .notNull()
-    .unique()
-    .references(() => auditFindings.id, { onDelete: "cascade" }),
-  problemSituation: text("problem_situation"), // Langkah 1: Situasi Terkini / Masalah
-  breakdown4H1W: text("breakdown_4h1w"),       // Langkah 2: Breakdown Masalah (Where, When, Who, What, Which)
-  targetSetting: text("target_setting"),       // Langkah 3: Penetapan Target
-  fishboneData: text("fishbone_data"),         // Langkah 4: Analisis Sebab-Akibat (Fishbone/5M+1E)
-  rootCause5Why: text("root_cause_5why"),      // Langkah 4: Akar Masalah (5-Why Analysis)
-  actionPlan: text("action_plan"),             // Langkah 5: Rencana Penanggulangan (Countermeasures/Action Plan)
-  evaluationResults: text("evaluation_results"), // Langkah 6-7: Evaluasi Hasil & Dampak
-  standardizationSOP: text("standardization_sop"), // Langkah 8: Standardisasi & SOP
-  beforePhotoUrl: text("before_photo_url"),
-  afterPhotoUrl: text("after_photo_url"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Relasi Drizzle ORM
-export const auditsRelations = relations(audits, ({ many }) => ({
-  findings: many(auditFindings),
-}));
-
-export const auditFindingsRelations = relations(auditFindings, ({ one }) => ({
-  audit: one(audits, {
-    fields: [auditFindings.auditId],
-    references: [audits.id],
-  }),
-  kaizen: one(kaizenPdca, {
-    fields: [auditFindings.id],
-    references: [kaizenPdca.findingId],
-  }),
-}));
-
-export const kaizenPdcaRelations = relations(kaizenPdca, ({ one }) => ({
-  finding: one(auditFindings, {
-    fields: [kaizenPdca.findingId],
-    references: [auditFindings.id],
-  }),
-}));
 
 export const auditChecklists = pgTable("audit_checklists", {
   id: serial("id").primaryKey(),
@@ -91,12 +26,15 @@ export const auditChecklists = pgTable("audit_checklists", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Tabel audit_reports — SATU-SATUNYA tabel temuan audit yang dipakai oleh UI
+// (AuditReportBuilder -> /api/reports). Lembar Kaizen PDCA berelasi One-to-One ke sini.
 export const auditReports = pgTable("audit_reports", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   area: text("area").notNull(), // 'Cutting', 'Prep', 'CSC'
   lineNumber: text("line_number"), // Line / Nomor Mesin (Opsional)
   domain: text("domain").notNull(), // 'MQAA', '6S', 'Visual Management', 'HSE', 'PS'
+  issueCategory: text("issue_category"), // Kategori masalah untuk analisis Pareto 80/20 (lihat src/lib/issueCategories.ts). Nullable untuk kompatibilitas data lama.
   findingDescription: text("finding_description").notNull(),
   rootCause: text("root_cause").notNull(), // Required Column #1
   actionPlan: text("action_plan").notNull(), // Required Column #2
@@ -107,8 +45,45 @@ export const auditReports = pgTable("audit_reports", {
   auditDate: text("audit_date").notNull(), // YYYY-MM-DD
   photoUrls: text("photo_urls").array(),
   isKaizenEscalated: boolean("is_kaizen_escalated").default(false).notNull(), // Kaizen Escalation flag for audit_reports
+  isKaizenOriginOnly: boolean("is_kaizen_origin_only").default(false).notNull(), // true = record ini dibuat otomatis sebagai wadah Kaizen mandiri (bukan hasil audit sungguhan)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Tabel kaizen_pdca (Lembar Kaizen 8 Langkah - One-to-One dengan audit_reports)
+export const kaizenPdca = pgTable("kaizen_pdca", {
+  id: serial("id").primaryKey(),
+  findingId: integer("finding_id")
+    .notNull()
+    .unique()
+    .references(() => auditReports.id, { onDelete: "cascade" }),
+  projectTitle: text("project_title"), // Judul Proyek — diwariskan dari judul Laporan Audit saat eskalasi
+  problemSituation: text("problem_situation"), // Langkah 1: Situasi Terkini / Masalah
+  breakdown4H1W: text("breakdown_4h1w"),       // Langkah 2: Breakdown Masalah (Where, When, Who, What, Which)
+  targetSetting: text("target_setting"),       // Langkah 3: Penetapan Target
+  fishboneData: text("fishbone_data"),         // Langkah 4: Analisis Sebab-Akibat (Fishbone/5M+1E)
+  rootCause5Why: text("root_cause_5why"),      // Langkah 4: Akar Masalah (5-Why Analysis)
+  actionPlan: text("action_plan"),             // Langkah 5: Rencana Penanggulangan (Countermeasures/Action Plan)
+  evaluationResults: text("evaluation_results"), // Langkah 6-7: Evaluasi Hasil & Dampak
+  standardizationSOP: text("standardization_sop"), // Langkah 8: Standardisasi & SOP
+  beforePhotoUrl: text("before_photo_url"),
+  afterPhotoUrl: text("after_photo_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Relasi Drizzle ORM
+export const auditReportsRelations = relations(auditReports, ({ one }) => ({
+  kaizen: one(kaizenPdca, {
+    fields: [auditReports.id],
+    references: [kaizenPdca.findingId],
+  }),
+}));
+
+export const kaizenPdcaRelations = relations(kaizenPdca, ({ one }) => ({
+  report: one(auditReports, {
+    fields: [kaizenPdca.findingId],
+    references: [auditReports.id],
+  }),
+}));
 
 export const weeklyReports = pgTable("weekly_reports", {
   id: serial("id").primaryKey(),

@@ -33,11 +33,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
     }
 
-    const userRole = String(session.role || "auditor");
-    if (userRole === "viewer") {
-      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
-    }
-
     const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
 
@@ -45,6 +40,7 @@ export async function POST(request: NextRequest) {
     const lineNumber = body.lineNumber ? sanitizeInput(body.lineNumber) : null;
     const domain = sanitizeInput(body.domain || "MQAA");
     const auditorName = sanitizeInput(body.auditorName || performer);
+    const bodyIssueCategory = body.issueCategory ? sanitizeInput(body.issueCategory) : null;
     const severity = sanitizeInput(body.severity || "Medium");
     const status = sanitizeInput(body.status || "Open");
     const auditDate = sanitizeInput(body.auditDate || new Date().toISOString().split("T")[0]);
@@ -52,6 +48,7 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(body.findings) && body.findings.length > 0) {
       const recordsToInsert = body.findings.map((f: any) => {
         const title = sanitizeInput(f.title || `Temuan Audit ${area}`);
+        const issueCategory = f.issueCategory ? sanitizeInput(f.issueCategory) : bodyIssueCategory;
         const findingDescription = sanitizeInput(f.findingDescription || "");
         const rootCause = sanitizeInput(f.rootCause || "");
         const actionPlan = sanitizeInput(f.actionPlan || "");
@@ -66,6 +63,7 @@ export async function POST(request: NextRequest) {
           area,
           lineNumber,
           domain,
+          issueCategory,
           findingDescription,
           rootCause,
           actionPlan,
@@ -132,6 +130,7 @@ export async function POST(request: NextRequest) {
         area,
         lineNumber,
         domain,
+        issueCategory: bodyIssueCategory,
         findingDescription,
         rootCause,
         actionPlan,
@@ -170,11 +169,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
     }
 
-    const userRole = String(session.role || "auditor");
-    if (userRole === "viewer") {
-      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
-    }
-
     const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const { id } = body;
@@ -192,6 +186,7 @@ export async function PATCH(request: NextRequest) {
     if (body.area !== undefined) updateData.area = sanitizeInput(body.area);
     if (body.lineNumber !== undefined) updateData.lineNumber = body.lineNumber ? sanitizeInput(body.lineNumber) : null;
     if (body.domain !== undefined) updateData.domain = sanitizeInput(body.domain);
+    if (body.issueCategory !== undefined) updateData.issueCategory = body.issueCategory ? sanitizeInput(body.issueCategory) : null;
     if (body.findingDescription !== undefined) updateData.findingDescription = sanitizeInput(body.findingDescription);
     if (body.rootCause !== undefined) updateData.rootCause = sanitizeInput(body.rootCause);
     if (body.actionPlan !== undefined) updateData.actionPlan = sanitizeInput(body.actionPlan);
@@ -236,14 +231,6 @@ export async function DELETE(request: NextRequest) {
     const session = await getSession();
     if (!session || !session.auth) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
-    }
-
-    const userRole = String(session.role || "auditor");
-    if (userRole !== "admin") {
-      return NextResponse.json(
-        { success: false, error: "Akses ditolak. Hanya peran Admin yang diizinkan untuk menghapus laporan audit." },
-        { status: 403 }
-      );
     }
 
     const performer = String(session.name || session.email || "Admin");

@@ -3,13 +3,15 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, TrendingUp, Sparkles, RefreshCw } from "lucide-react";
+import { ArrowLeft, TrendingUp, Sparkles, RefreshCw, Loader2 } from "lucide-react";
 import { KaizenPdcaModal } from "@/components/KaizenPdcaModal";
 
 export default function KaizenPage() {
   const [kaizenList, setKaizenList] = useState<any[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const loadKaizenData = useCallback(async (isMounted: boolean) => {
     try {
@@ -29,11 +31,51 @@ export default function KaizenPage() {
 
   useEffect(() => {
     let isMounted = true;
-    loadKaizenData(isMounted);
+    (async () => {
+      const res = await fetch("/api/kaizen");
+      const json = await res.json();
+      if (isMounted && json.success && Array.isArray(json.data)) {
+        setKaizenList(json.data);
+      }
+    })()
+      .catch((err) => console.error("Failed to load Kaizen records:", err))
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
     return () => {
       isMounted = false;
     };
-  }, [loadKaizenData]);
+  }, []);
+
+  const handleCreateNewKaizen = useCallback(async () => {
+    setIsCreatingNew(true);
+    setCreateError("");
+    try {
+      const res = await fetch("/api/kaizen/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Inisiasi Kaizen Mandiri Sektor Operasional",
+          area: "Cutting",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal membuat Lembar Kaizen baru.");
+      }
+      setSelectedFinding({
+        findingId: json.data.id,
+        findingDescription: "Inisiasi Kaizen Mandiri Sektor Operasional",
+        aiRootCause: "Akar masalah teridentifikasi dari observasi lapangan.",
+        area: json.data.area || "Cutting",
+        projectTitle: json.data.title,
+      });
+    } catch (err: any) {
+      setCreateError(err.message || "Terjadi kesalahan saat membuat Lembar Kaizen baru.");
+    } finally {
+      setIsCreatingNew(false);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 pb-16 p-4 md:p-8 space-y-6">
@@ -69,20 +111,20 @@ export default function KaizenPage() {
             </div>
 
             <button
-              onClick={() =>
-                setSelectedFinding({
-                  findingId: Date.now(),
-                  findingDescription: "Inisiasi Kaizen Mandiri Sektor Operasional",
-                  aiRootCause: "Akar masalah teridentifikasi dari observasi lapangan.",
-                  area: "Cutting",
-                })
-              }
-              className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-2xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              onClick={handleCreateNewKaizen}
+              disabled={isCreatingNew}
+              className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-2xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>+ Buat Lembar Kaizen Baru</span>
+              {isCreatingNew ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span>{isCreatingNew ? "Menyiapkan..." : "+ Buat Lembar Kaizen Baru"}</span>
             </button>
           </div>
+
+          {createError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
+              {createError}
+            </div>
+          )}
 
           {isLoading ? (
             <div className="p-8 text-center text-slate-400 text-xs animate-pulse">
@@ -104,6 +146,7 @@ export default function KaizenPage() {
                       findingDescription: k.problemSituation || "Temuan Kaizen #" + k.findingId,
                       aiRootCause: k.rootCause5Why,
                       area: "Sektor Kaizen",
+                      projectTitle: k.projectTitle || "",
                     })
                   }
                   className="bg-slate-50/80 hover:bg-white p-5 rounded-2xl border border-slate-200/80 hover:border-purple-300 shadow-2xs hover:shadow-md transition-all cursor-pointer space-y-3"
@@ -116,7 +159,7 @@ export default function KaizenPage() {
                   </div>
 
                   <p className="text-xs font-bold text-slate-800 line-clamp-2">
-                    {k.problemSituation || "Lembar Kaizen PDCA 8 Langkah"}
+                    {k.projectTitle || k.problemSituation || "Lembar Kaizen PDCA 8 Langkah"}
                   </p>
 
                   {k.actionPlan && (
@@ -137,6 +180,7 @@ export default function KaizenPage() {
           findingDescription={selectedFinding.findingDescription}
           aiRootCause={selectedFinding.aiRootCause}
           area={selectedFinding.area}
+          projectTitle={selectedFinding.projectTitle}
           onClose={() => setSelectedFinding(null)}
           onSaveSuccess={() => loadKaizenData(true)}
         />

@@ -3,6 +3,14 @@ import jsPDF from "jspdf";
 import { formatIndonesianDate } from "./dateUtils";
 import { ChecklistItem } from "@/components/ThreeMonthTimeline";
 import { AuditReportItem } from "@/components/AuditReportBuilder";
+import { ALL_DOMAINS, getDomainConfig, normalizeDomainName } from "@/components/DomainBadge";
+import { computeParetoAnalysis } from "./paretoUtils";
+
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const bigint = parseInt(clean, 16);
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+}
 
 interface PDFGeneratorOptions {
   timelineFilter?: string;
@@ -298,7 +306,7 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
 
   y += 4;
 
-  // --- SECTION 2: DAFTAR LAPORAN AUDIT ---
+  // --- SECTION 2: DAFTAR LAPORAN AUDIT (DIKELOMPOKKAN PER DOMAIN) ---
   checkNewPage(20);
   doc.setFillColor(0, 0, 0);
   doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
@@ -316,156 +324,203 @@ export async function generateAuditResumePDF(data: any): Promise<jsPDF> {
     doc.text("Tidak ada laporan audit yang cocok dengan filter aktif.", margin + 2, y);
     y += 8;
   } else {
-    for (let index = 0; index < reports.length; index++) {
-      const rep = reports[index];
-      checkNewPage(35);
+    // Kelompokkan laporan per domain agar tiap bagian (mis. "audit MQAA") hanya berisi domain itu sendiri
+    // Domain dinormalisasi (case-insensitive) supaya data lama dengan kapitalisasi berbeda tetap tergabung.
+    const domainsPresent = ALL_DOMAINS.filter((d) => reports.some((r: any) => normalizeDomainName(r.domain) === d));
+    // Sertakan domain di luar 5 domain baku (data legacy/custom) di akhir
+    reports.forEach((r: any) => {
+      const normalized = normalizeDomainName(r.domain);
+      if (normalized && !domainsPresent.includes(normalized)) domainsPresent.push(normalized);
+    });
 
-      const indonesianDate = formatIndonesianDate(rep.auditDate);
+    for (const domainName of domainsPresent) {
+      const domainReports = reports.filter((r: any) => normalizeDomainName(r.domain) === domainName);
+      if (domainReports.length === 0) continue;
 
-      doc.setFillColor(249, 250, 251);
-      doc.setDrawColor(209, 213, 219);
-      doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
+      const config = getDomainConfig(domainName);
+      const [r, g, b] = hexToRgb(config.accent);
 
+      // Sub-header domain
+      checkNewPage(14);
+      doc.setFillColor(r, g, b);
+      doc.roundedRect(margin, y, contentWidth, 7, 1, 1, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`LAPORAN #${index + 1}: ${String(rep.title || "").toUpperCase()}`, margin + 3, y + 5);
+      doc.setFontSize(9.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`DOMAIN: ${domainName.toUpperCase()} (${domainReports.length} Laporan)`, margin + 4, y + 5);
+      y += 11;
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(50, 50, 50);
-      doc.text(
-        `Tanggal: ${indonesianDate} | Area: ${rep.area || "-"} | Domain: ${rep.domain || "-"} | Severity: ${rep.severity || "Medium"} | Status: ${rep.status || "Open"}`,
-        margin + 3,
-        y + 10
-      );
-
-      y += 18;
-
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Auditor: ${rep.auditorName || "Auditor"}`, margin + 2, y);
-      y += 5;
-
-      checkNewPage(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0);
-      doc.text("Deskripsi Temuan Lapangan:", margin + 2, y);
-      y += 4;
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(30, 30, 30);
-      const findingLines = doc.splitTextToSize(rep.findingDescription || "-", contentWidth - 6);
-      doc.text(findingLines, margin + 4, y);
-      y += findingLines.length * 3.8 + 4;
-
-      // 3 Required Columns
-      checkNewPage(15);
-      doc.setFillColor(243, 244, 246);
-      doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
-      doc.text("1. Root Cause Analysis (Akar Masalah):", margin + 4, y + 3.5);
-      y += 7;
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(30, 30, 30);
-      const rcLines = doc.splitTextToSize(rep.rootCause || "-", contentWidth - 8);
-      doc.text(rcLines, margin + 6, y);
-      y += rcLines.length * 3.8 + 4;
-
-      checkNewPage(15);
-      doc.setFillColor(243, 244, 246);
-      doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
-      doc.text("2. Action Plan Remediasi (Rencana Perbaikan):", margin + 4, y + 3.5);
-      y += 7;
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(30, 30, 30);
-      const apLines = doc.splitTextToSize(rep.actionPlan || "-", contentWidth - 8);
-      doc.text(apLines, margin + 6, y);
-      y += apLines.length * 3.8 + 4;
-
-      checkNewPage(15);
-      doc.setFillColor(243, 244, 246);
-      doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
-      doc.text("3. Key Lesson Learned (Pembelajaran Utama):", margin + 4, y + 3.5);
-      y += 7;
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(30, 30, 30);
-      const llLines = doc.splitTextToSize(rep.lessonLearned || "-", contentWidth - 8);
-      doc.text(llLines, margin + 6, y);
-      y += llLines.length * 3.8 + 4;
-
-      // Embedded Photos
-      if (Array.isArray(rep.photoUrls) && rep.photoUrls.length > 0) {
-        checkNewPage(20);
+      // Ringkasan Pareto 80/20 domain ini
+      const pareto = computeParetoAnalysis(domainReports);
+      if (pareto.totalFindings > 0 && pareto.vitalFewCategories.length > 0) {
+        checkNewPage(16);
+        doc.setFillColor(255, 251, 235);
+        doc.setDrawColor(252, 211, 77);
+        const paretoText = `Isu Krusial (Pareto 80/20): ${pareto.vitalFewCategories.length} dari ${pareto.bars.length} kategori menyumbang ${Math.round(pareto.vitalFewShare)}% temuan — ${pareto.vitalFewCategories.join(", ")}.`;
+        const paretoLines = doc.splitTextToSize(paretoText, contentWidth - 8);
+        const boxHeight = paretoLines.length * 3.8 + 5;
+        doc.roundedRect(margin, y, contentWidth, boxHeight, 1, 1, "FD");
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
+        doc.setFontSize(7.8);
+        doc.setTextColor(120, 80, 10);
+        doc.text(paretoLines, margin + 3, y + 4.5);
+        y += boxHeight + 4;
+      }
+
+      for (let index = 0; index < domainReports.length; index++) {
+        const rep = domainReports[index];
+        checkNewPage(35);
+
+        const indonesianDate = formatIndonesianDate(rep.auditDate);
+
+        doc.setFillColor(249, 250, 251);
+        doc.setDrawColor(209, 213, 219);
+        doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
         doc.setTextColor(0, 0, 0);
-        doc.text("Lampiran Foto Temuan Lapangan:", margin + 2, y);
+        doc.text(`LAPORAN ${domainName} #${index + 1}: ${String(rep.title || "").toUpperCase()}`, margin + 3, y + 5);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        const categoryTag = rep.issueCategory ? ` | Kategori: ${rep.issueCategory}` : "";
+        doc.text(
+          `Tanggal: ${indonesianDate} | Area: ${rep.area || "-"} | Severity: ${rep.severity || "Medium"} | Status: ${rep.status || "Open"}${categoryTag}`,
+          margin + 3,
+          y + 10
+        );
+
+        y += 18;
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Auditor: ${rep.auditorName || "Auditor"}`, margin + 2, y);
         y += 5;
 
-        const photoWidth = 52;
-        const photoHeight = 38;
-        const gap = 6;
-        const maxPerRow = 3;
+        checkNewPage(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 0, 0);
+        doc.text("Deskripsi Temuan Lapangan:", margin + 2, y);
+        y += 4;
 
-        for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
-          const photoUrl = rep.photoUrls[pIdx];
-          const imgData = await fetchImageAsDataUrl(photoUrl);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+        const findingLines = doc.splitTextToSize(rep.findingDescription || "-", contentWidth - 6);
+        doc.text(findingLines, margin + 4, y);
+        y += findingLines.length * 3.8 + 4;
 
-          if (imgData) {
-            const col = pIdx % maxPerRow;
-            if (col === 0 && pIdx > 0) {
-              y += photoHeight + 8;
-            }
-            checkNewPage(photoHeight + 8);
+        // 3 Required Columns
+        checkNewPage(15);
+        doc.setFillColor(243, 244, 246);
+        doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        doc.text("1. Root Cause Analysis (Akar Masalah):", margin + 4, y + 3.5);
+        y += 7;
 
-            const xPos = margin + 2 + col * (photoWidth + gap);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+        const rcLines = doc.splitTextToSize(rep.rootCause || "-", contentWidth - 8);
+        doc.text(rcLines, margin + 6, y);
+        y += rcLines.length * 3.8 + 4;
 
-            try {
-              doc.addImage(
-                imgData.dataUrl,
-                imgData.format,
-                xPos,
-                y,
-                photoWidth,
-                photoHeight
-              );
-              doc.setDrawColor(200, 200, 200);
-              doc.rect(xPos, y, photoWidth, photoHeight);
+        checkNewPage(15);
+        doc.setFillColor(243, 244, 246);
+        doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        doc.text("2. Action Plan Remediasi (Rencana Perbaikan):", margin + 4, y + 3.5);
+        y += 7;
 
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(7.5);
-              doc.setTextColor(80, 80, 80);
-              doc.text(`Foto ${pIdx + 1}`, xPos + 2, y + photoHeight + 4);
-            } catch (err) {
-              console.error("Error drawing photo in PDF:", err);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+        const apLines = doc.splitTextToSize(rep.actionPlan || "-", contentWidth - 8);
+        doc.text(apLines, margin + 6, y);
+        y += apLines.length * 3.8 + 4;
+
+        checkNewPage(15);
+        doc.setFillColor(243, 244, 246);
+        doc.roundedRect(margin + 2, y, contentWidth - 4, 5, 1, 1, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        doc.text("3. Key Lesson Learned (Pembelajaran Utama):", margin + 4, y + 3.5);
+        y += 7;
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+        const llLines = doc.splitTextToSize(rep.lessonLearned || "-", contentWidth - 8);
+        doc.text(llLines, margin + 6, y);
+        y += llLines.length * 3.8 + 4;
+
+        // Embedded Photos
+        if (Array.isArray(rep.photoUrls) && rep.photoUrls.length > 0) {
+          checkNewPage(20);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.5);
+          doc.setTextColor(0, 0, 0);
+          doc.text("Lampiran Foto Temuan Lapangan:", margin + 2, y);
+          y += 5;
+
+          const photoWidth = 52;
+          const photoHeight = 38;
+          const gap = 6;
+          const maxPerRow = 3;
+
+          for (let pIdx = 0; pIdx < rep.photoUrls.length; pIdx++) {
+            const photoUrl = rep.photoUrls[pIdx];
+            const imgData = await fetchImageAsDataUrl(photoUrl);
+
+            if (imgData) {
+              const col = pIdx % maxPerRow;
+              if (col === 0 && pIdx > 0) {
+                y += photoHeight + 8;
+              }
+              checkNewPage(photoHeight + 8);
+
+              const xPos = margin + 2 + col * (photoWidth + gap);
+
+              try {
+                doc.addImage(
+                  imgData.dataUrl,
+                  imgData.format,
+                  xPos,
+                  y,
+                  photoWidth,
+                  photoHeight
+                );
+                doc.setDrawColor(200, 200, 200);
+                doc.rect(xPos, y, photoWidth, photoHeight);
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.setTextColor(80, 80, 80);
+                doc.text(`Foto ${pIdx + 1}`, xPos + 2, y + photoHeight + 4);
+              } catch (err) {
+                console.error("Error drawing photo in PDF:", err);
+              }
             }
           }
+
+          y += photoHeight + 8;
         }
 
-        y += photoHeight + 8;
+        // If Kaizen PDCA Data exists, append Kaizen PDCA 8-Step Sheet Page
+        if ((rep as any).kaizen) {
+          await renderKaizenPdcaPage(doc, (rep as any).kaizen, rep.title || "Laporan Audit");
+        }
+
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
       }
 
-      // If Kaizen PDCA Data exists, append Kaizen PDCA 8-Step Sheet Page
-      if ((rep as any).kaizen) {
-        await renderKaizenPdcaPage(doc, (rep as any).kaizen, rep.title || "Laporan Audit");
-      }
-
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 6;
+      y += 3;
     }
   }
 

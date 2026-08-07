@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { weeklyCadence } from "@/db/schema";
+import { weeklyCadence, auditLogs } from "@/db/schema";
 import { ensureInitialData } from "@/lib/seedData";
 import { sanitizeInput } from "@/lib/sanitize";
+import { getSession } from "@/lib/auth";
 import { eq, asc } from "drizzle-orm";
 
 export async function GET() {
@@ -25,6 +26,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const weekNumber = Number(body.weekNumber) || 1;
     const title = sanitizeInput(body.title || `Minggu ${weekNumber}`);
@@ -56,6 +63,14 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    await db.insert(auditLogs).values({
+      action: "CREATE",
+      entity: "WEEKLY_CADENCE",
+      entityId: newCadence[0].id,
+      details: `Created weekly cadence week #${weekNumber} by ${performer}`,
+      performedBy: performer,
+    });
+
     return NextResponse.json({ success: true, data: newCadence[0] });
   } catch (error) {
     console.error("POST weekly cadence error:", error);
@@ -68,6 +83,12 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const { id } = body;
 
@@ -102,6 +123,14 @@ export async function PATCH(request: NextRequest) {
       .where(eq(weeklyCadence.id, Number(id)))
       .returning();
 
+    await db.insert(auditLogs).values({
+      action: "UPDATE",
+      entity: "WEEKLY_CADENCE",
+      entityId: Number(id),
+      details: `Updated weekly cadence #${id} by ${performer}`,
+      performedBy: performer,
+    });
+
     return NextResponse.json({ success: true, data: updated[0] });
   } catch (error) {
     console.error("PATCH weekly cadence error:", error);
@@ -114,6 +143,12 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
+    const performer = String(session.name || session.email || "Admin");
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -125,6 +160,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     await db.delete(weeklyCadence).where(eq(weeklyCadence.id, Number(id)));
+
+    await db.insert(auditLogs).values({
+      action: "DELETE",
+      entity: "WEEKLY_CADENCE",
+      entityId: Number(id),
+      details: `Deleted weekly cadence #${id} by ${performer}`,
+      performedBy: performer,
+    });
 
     return NextResponse.json({ success: true, message: "Minggu berhasil dihapus." });
   } catch (error) {

@@ -9,6 +9,7 @@ import { formatIndonesianDate } from "@/lib/dateUtils";
 export interface KaizenData {
   id?: number;
   findingId: number;
+  projectTitle?: string;
   problemSituation: string;
   breakdown4H1W: string;
   targetSetting: string;
@@ -26,6 +27,7 @@ interface KaizenPdcaModalProps {
   findingDescription: string;
   aiRootCause?: string | null;
   area?: string;
+  projectTitle?: string;
   onClose: () => void;
   onSaveSuccess?: () => void;
 }
@@ -35,9 +37,12 @@ export function KaizenPdcaModal({
   findingDescription,
   aiRootCause,
   area = "Cutting",
+  projectTitle: initialProjectTitle,
   onClose,
   onSaveSuccess,
 }: KaizenPdcaModalProps) {
+  // Judul Proyek — default diwariskan dari judul Laporan Audit saat eskalasi, tetap bisa diedit
+  const [projectTitle, setProjectTitle] = useState(initialProjectTitle || "");
   // Kaizen 8 Steps Form State
   const [problemSituation, setProblemSituation] = useState(findingDescription || "");
   const [breakdown4H1W, setBreakdown4H1W] = useState("• What: Cacat / deviasi material\n• Where: Line produksi " + area + "\n• When: Shift 1 On-Site Execution\n• Who: Operator & Supervisor Line\n• Which: Lot produksi aktif");
@@ -71,6 +76,7 @@ export function KaizenPdcaModal({
         const json = await res.json();
         if (json.success && json.data) {
           const k = json.data;
+          if (k.projectTitle) setProjectTitle(k.projectTitle);
           if (k.problemSituation) setProblemSituation(k.problemSituation);
           if (k.breakdown4H1W) setBreakdown4H1W(k.breakdown4H1W);
           if (k.targetSetting) setTargetSetting(k.targetSetting);
@@ -191,6 +197,7 @@ export function KaizenPdcaModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           findingId,
+          projectTitle,
           problemSituation,
           breakdown4H1W,
           targetSetting,
@@ -241,6 +248,20 @@ export function KaizenPdcaModal({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* JUDUL PROYEK — diwariskan dari Judul Laporan Audit saat eskalasi, tetap bisa diedit di sini */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-700 block">
+            Judul Proyek Kaizen
+          </label>
+          <input
+            type="text"
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            placeholder="Judul proyek Kaizen (terisi otomatis dari Judul Laporan Audit bila dieskalasi)"
+            className="w-full p-3 bg-purple-50/50 border border-purple-200 rounded-xl text-sm font-bold outline-none focus:border-purple-500 text-slate-800"
+          />
         </div>
 
         {errorMsg && (

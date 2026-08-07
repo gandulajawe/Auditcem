@@ -1,7 +1,7 @@
 // File: src/app/api/kaizen/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { kaizenPdca, auditFindings, auditLogs } from "@/db/schema";
+import { kaizenPdca, auditReports, auditLogs } from "@/db/schema";
 import { sanitizeInput } from "@/lib/sanitize";
 import { getSession } from "@/lib/auth";
 import { eq } from "drizzle-orm";
@@ -43,11 +43,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
     }
 
-    const userRole = String(session.role || "auditor");
-    if (userRole === "viewer") {
-      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
-    }
-
     const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const findingId = Number(body.findingId);
@@ -59,6 +54,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Pastikan findingId merujuk ke Laporan Audit yang benar-benar ada
+    // (mencegah error foreign key violation dari Postgres yang membingungkan).
+    const parentReport = await db
+      .select({ id: auditReports.id })
+      .from(auditReports)
+      .where(eq(auditReports.id, findingId));
+
+    if (parentReport.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Laporan Audit terkait tidak ditemukan. Lembar Kaizen harus terhubung ke Laporan Audit yang valid." },
+        { status: 404 }
+      );
+    }
+
+    const projectTitle = sanitizeInput(body.projectTitle || "");
     const problemSituation = sanitizeInput(body.problemSituation || "");
     const breakdown4H1W = sanitizeInput(body.breakdown4H1W || "");
     const targetSetting = sanitizeInput(body.targetSetting || "");
@@ -81,6 +91,7 @@ export async function POST(request: NextRequest) {
       const [updated] = await db
         .update(kaizenPdca)
         .set({
+          projectTitle,
           problemSituation,
           breakdown4H1W,
           targetSetting,
@@ -100,6 +111,7 @@ export async function POST(request: NextRequest) {
         .insert(kaizenPdca)
         .values({
           findingId,
+          projectTitle,
           problemSituation,
           breakdown4H1W,
           targetSetting,
@@ -115,11 +127,11 @@ export async function POST(request: NextRequest) {
       resultRecord = inserted;
     }
 
-    // Set isKaizenEscalated = true
+    // Set isKaizenEscalated = true pada Laporan Audit terkait (audit_reports)
     await db
-      .update(auditFindings)
+      .update(auditReports)
       .set({ isKaizenEscalated: true })
-      .where(eq(auditFindings.id, findingId));
+      .where(eq(auditReports.id, findingId));
 
     await db.insert(auditLogs).values({
       action: "UPDATE",

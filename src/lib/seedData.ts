@@ -1,40 +1,29 @@
 // File: src/lib/seedData.ts
 import { db } from "@/db";
 import { appSettings, users, auditChecklists, weeklyReports, auditReports } from "@/db/schema";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, getRequiredEnv } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 
 export async function ensureInitialData() {
   try {
-    // 1. Always ensure default users exist if users table is empty
+    // 1. Always ensure the single user account exists if the users table is empty.
+    // This is a single-user app — no multi-account / role system needed.
     const existingUsers = await db.select().from(users);
     if (existingUsers.length === 0) {
-      const defaultPassword = process.env.APP_PASSWORD || "crucible2026";
-      const adminHash = await hashPassword(defaultPassword);
-      const auditorHash = await hashPassword("auditor2026");
-      const viewerHash = await hashPassword("viewer2026");
+      // No hardcoded default: the account password must be set explicitly via
+      // APP_PASSWORD so it can never silently match a publicly known value
+      // from source control or documentation.
+      const defaultPassword = getRequiredEnv("APP_PASSWORD");
+      const passwordHash = await hashPassword(defaultPassword);
 
       await db.insert(users).values([
         {
-          name: "Admin Auditor",
-          email: "admin@factory.com",
-          password: adminHash,
-          role: "admin",
-        },
-        {
           name: "Auditor Gandul",
-          email: "auditor@factory.com",
-          password: auditorHash,
-          role: "auditor",
-        },
-        {
-          name: "Viewer Pabrik",
-          email: "viewer@factory.com",
-          password: viewerHash,
-          role: "viewer",
+          email: "admin@factory.com",
+          password: passwordHash,
         },
       ]);
-      console.log("Seeded default users (Admin, Auditor, Viewer).");
+      console.log("Seeded default user account.");
     }
 
     // 2. Check if initial checklist seeding flag is already present

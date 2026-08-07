@@ -142,7 +142,7 @@ export function DownloadResumeSection({ checklists, reports }: DownloadResumeSec
             Download Resume Audit (.pdf)
           </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-xl">
-            Pilih kriteria filter di bawah. Sistem otomatis merangkum data checklist dan laporan audit murni dari database dalam format PDF resmi.
+            Pilih kriteria filter di bawah. Sistem otomatis merangkum data checklist dan laporan audit murni dari database dalam format PDF resmi. Laporan audit di dalam PDF kini dikelompokkan per domain (MQAA, 6S, VM, HSE, PS) — masing-masing dengan ringkasan isu krusial (Pareto 80/20) sendiri.
           </p>
         </div>
 

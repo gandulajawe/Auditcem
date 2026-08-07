@@ -1,6 +1,8 @@
 // File: src/lib/aiAudit.ts
 import { GoogleGenAI } from "@google/genai";
 import { sanitizeInput } from "@/lib/sanitize";
+import { ISSUE_CATEGORIES, IssueCategory, suggestIssueCategory } from "@/lib/issueCategories";
+import { getGeminiModel } from "@/lib/geminiConfig";
 
 export interface ActionPlanRow {
   horizon: "Jangka Pendek" | "Jangka Panjang";
@@ -15,15 +17,20 @@ export interface AuditAnalysisResult {
   actionPlanTable: ActionPlanRow[];
   rootCause: string;
   actionPlan: string;
+  issueCategory: IssueCategory;
 }
 
 export const AI_SYSTEM_PROMPT = `Anda adalah Chief Quality & Safety Auditor senior berpengalaman di industri manufaktur sepatu (CEM Footwear Manufacturing).
 
 Analisislah temuan audit operasional berikut dan buatkan Rencana Tindakan Remediation (Corrective and Preventive Action / CAPA Table).
 
+Selain itu, klasifikasikan temuan ke dalam SATU kategori masalah dari daftar tetap berikut (pilih yang paling sesuai, jangan buat kategori baru):
+${ISSUE_CATEGORIES.map((c) => `- ${c}`).join("\n")}
+
 Hasilkan output JSON murni tanpa pembungkus markdown dengan format struktur persis seperti berikut:
 {
   "summary": "Ringkasan singkat analisis akar masalah (1-2 kalimat)",
+  "issueCategory": "Salah satu nilai persis dari daftar kategori di atas",
   "actionPlanTable": [
     {
       "horizon": "Jangka Pendek",
@@ -66,7 +73,7 @@ Deskripsi Temuan: ${description}
 Catatan Auditor: ${auditorNotes || "-"}`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: `${AI_SYSTEM_PROMPT}\n\n[DATA TEMUAN AUDIT]\n${userPrompt}`,
       });
 
@@ -77,6 +84,9 @@ Catatan Auditor: ${auditorNotes || "-"}`;
 
         const summary = parsed.summary || "Analisis akar masalah temuan audit operasional.";
         const actionPlanTable: ActionPlanRow[] = Array.isArray(parsed.actionPlanTable) ? parsed.actionPlanTable : [];
+        const issueCategory: IssueCategory = ISSUE_CATEGORIES.includes(parsed.issueCategory)
+          ? parsed.issueCategory
+          : suggestIssueCategory(description);
 
         const formattedActionPlanText = actionPlanTable
           .map(
@@ -90,6 +100,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
           actionPlanTable,
           rootCause: summary,
           actionPlan: formattedActionPlanText,
+          issueCategory,
         };
       }
     } catch (e) {
@@ -123,6 +134,9 @@ Catatan Auditor: ${auditorNotes || "-"}`;
 
         const summary = parsed.summary || "Analisis akar masalah temuan audit operasional.";
         const actionPlanTable: ActionPlanRow[] = Array.isArray(parsed.actionPlanTable) ? parsed.actionPlanTable : [];
+        const issueCategory: IssueCategory = ISSUE_CATEGORIES.includes(parsed.issueCategory)
+          ? parsed.issueCategory
+          : suggestIssueCategory(description);
 
         const formattedActionPlanText = actionPlanTable
           .map(
@@ -136,6 +150,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
           actionPlanTable,
           rootCause: summary,
           actionPlan: formattedActionPlanText,
+          issueCategory,
         };
       }
     } catch (e) {
@@ -147,6 +162,7 @@ Catatan Auditor: ${auditorNotes || "-"}`;
   const lowerDesc = description.toLowerCase();
   let summary = "";
   let actionPlanTable: ActionPlanRow[] = [];
+  const issueCategory: IssueCategory = suggestIssueCategory(description);
 
   if (lowerDesc.includes("suhu") || lowerDesc.includes("oven") || lowerDesc.includes("panas") || lowerDesc.includes("lem") || lowerDesc.includes("cement")) {
     summary = "Variasi suhu oven aktivasi lem dan penurunan viskositas primer disebabkan oleh deposit uap lem pada thermo-sensor dan penguapan solvent pada wadah terbuka.";
@@ -230,5 +246,6 @@ Catatan Auditor: ${auditorNotes || "-"}`;
     actionPlanTable,
     rootCause: summary,
     actionPlan: formattedActionPlanText,
+    issueCategory,
   };
 }

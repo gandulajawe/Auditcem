@@ -37,20 +37,22 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
   const inProgressReports = reports.filter((r) => r.status === "In Progress").length;
   const resolvedReports = reports.filter((r) => r.status === "Resolved").length;
 
-  // Domain with most findings calculation
+  // Domain with most findings calculation.
+  // Explicitly detect ties instead of silently picking whichever domain
+  // happens to be iterated first when counts are equal (e.g. 1-1-1).
   const domainCounts: Record<string, number> = {};
   reports.forEach((r) => {
     domainCounts[r.domain] = (domainCounts[r.domain] || 0) + 1;
   });
 
-  let topDomain = "N/A";
-  let topDomainCount = 0;
-  Object.entries(domainCounts).forEach(([domain, count]) => {
-    if (count > topDomainCount) {
-      topDomain = domain;
-      topDomainCount = count;
-    }
-  });
+  const domainEntries = Object.entries(domainCounts);
+  const maxDomainCount = domainEntries.reduce((max, [, count]) => Math.max(max, count), 0);
+  const topDomains = domainEntries
+    .filter(([, count]) => count === maxDomainCount)
+    .map(([domain]) => domain);
+  const isDomainTie = topDomains.length > 1;
+  const topDomain = topDomains[0] || "N/A";
+  const topDomainCount = maxDomainCount;
 
   // Transform raw findings into Pivot Matrix (Rows, Totals, Chart Data)
   const pivotMatrix = generatePivotData(reports, DEFAULT_MONTHS);
@@ -140,11 +142,24 @@ export function SummaryDashboard({ checklists, reports }: SummaryDashboardProps)
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <DomainBadge domain={topDomain} size="md" />
+            <div className="flex flex-wrap items-center gap-1.5">
+              {topDomains.length > 0 ? (
+                topDomains.map((domain) => <DomainBadge key={domain} domain={domain} size="md" />)
+              ) : (
+                <DomainBadge domain={topDomain} size="md" />
+              )}
             </div>
             <p className="text-xs text-slate-500 font-medium mt-2">
-              <strong>{topDomainCount} temuan</strong> tercatat pada domain ini.
+              {isDomainTie ? (
+                <>
+                  <strong>{topDomains.length} domain seri</strong> dengan{" "}
+                  <strong>{topDomainCount} temuan</strong> masing-masing.
+                </>
+              ) : (
+                <>
+                  <strong>{topDomainCount} temuan</strong> tercatat pada domain ini.
+                </>
+              )}
             </p>
           </div>
         </div>

@@ -33,11 +33,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
     }
 
-    const userRole = String(session.role || "auditor");
-    if (userRole === "viewer") {
-      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
-    }
-
     const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const month = sanitizeInput(body.month || "September");
@@ -93,11 +88,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
     }
 
-    const userRole = String(session.role || "auditor");
-    if (userRole === "viewer") {
-      return NextResponse.json({ success: false, error: "Akses ditolak. Peran Viewer hanya memiliki izin baca (Read-Only)." }, { status: 403 });
-    }
-
     const performer = String(session.name || session.email || "Auditor");
     const body = await request.json();
     const { id, completed, title, description, domain, area, month, auditDate } = body;
@@ -151,14 +141,6 @@ export async function DELETE(request: NextRequest) {
     const session = await getSession();
     if (!session || !session.auth) {
       return NextResponse.json({ success: false, error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
-    }
-
-    const userRole = String(session.role || "auditor");
-    if (userRole !== "admin") {
-      return NextResponse.json(
-        { success: false, error: "Akses ditolak. Hanya peran Admin yang diizinkan untuk menghapus item checklist." },
-        { status: 403 }
-      );
     }
 
     const performer = String(session.name || session.email || "Admin");

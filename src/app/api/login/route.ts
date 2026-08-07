@@ -47,13 +47,7 @@ export async function POST(request: NextRequest) {
       .from(users)
       .where(eq(users.email, sanitizedEmail));
 
-    let targetUser = matchedUsers[0];
-
-    // Fallback if user is not found by email but email is "admin@factory.com"
-    if (!targetUser && sanitizedEmail === "admin@factory.com") {
-      const allUsers = await db.select().from(users);
-      if (allUsers.length > 0) targetUser = allUsers[0];
-    }
+    const targetUser = matchedUsers[0];
 
     if (!targetUser) {
       const failedResult = await recordFailedAttempt(ip);
@@ -90,12 +84,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update stored password hash if fallback matched
-    const newHash = await hashPassword(sanitizedPassword);
-    if (targetUser.password !== newHash) {
+    // Transparently upgrade legacy (pre-scrypt) password hashes on successful
+    // login, so every account migrates to the stronger scheme over time
+    // without forcing a password reset.
+    if (!targetUser.password.startsWith("scrypt:")) {
+      const upgradedHash = await hashPassword(sanitizedPassword);
       await db
         .update(users)
-        .set({ password: newHash })
+        .set({ password: upgradedHash })
         .where(eq(users.id, targetUser.id));
     }
 
@@ -107,7 +103,6 @@ export async function POST(request: NextRequest) {
       userId: targetUser.id,
       email: targetUser.email,
       name: targetUser.name,
-      role: targetUser.role,
     });
 
     // Audit Log login event
@@ -115,7 +110,7 @@ export async function POST(request: NextRequest) {
       action: "LOGIN",
       entity: "USER",
       entityId: targetUser.id,
-      details: `User ${targetUser.email} (${targetUser.role}) successfully logged in from IP ${ip}`,
+      details: `User ${targetUser.email} successfully logged in from IP ${ip}`,
       performedBy: targetUser.name || targetUser.email,
     });
 
@@ -126,7 +121,6 @@ export async function POST(request: NextRequest) {
         id: targetUser.id,
         email: targetUser.email,
         name: targetUser.name,
-        role: targetUser.role,
       },
     });
   } catch (error) {

@@ -1,8 +1,19 @@
 import { put } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+
+// Only real image types are accepted. This blocks SVG (can carry inline
+// <script>), HTML, and arbitrary file uploads from being hosted at a public
+// URL under our domain/blob store.
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.auth) {
+      return NextResponse.json({ error: "Sesi tidak ditemukan. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const rawFilename = searchParams.get("filename") || `audit-${Date.now()}.jpg`;
     // Clean filename
@@ -17,6 +28,14 @@ export async function POST(request: NextRequest) {
     // Check size limit: 5MB
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: "Ukuran file melebihi batas 5MB." }, { status: 400 });
+    }
+
+    // Reject anything that isn't a genuine, allow-listed image MIME type.
+    if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
+      return NextResponse.json(
+        { error: "Tipe file tidak didukung. Hanya gambar (JPEG, PNG, WEBP, HEIC) yang diizinkan." },
+        { status: 400 }
+      );
     }
 
     // If BLOB_READ_WRITE_TOKEN is configured, use Vercel Blob with unique random suffix
