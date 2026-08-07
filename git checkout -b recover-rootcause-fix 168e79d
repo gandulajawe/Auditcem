@@ -1,0 +1,20 @@
+[33mc625de2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m HEAD@{0}: reset: moving to origin/main
+[33m168e79d[m HEAD@{1}: rebase (abort): returning to refs/heads/main
+[33mc625de2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m HEAD@{2}: pull origin main --rebase (start): checkout c625de2e78ec1c99c97cba4c53323cdae7246c84
+[33m168e79d[m HEAD@{3}: commit: fix: root cause manual-only, AI action plan pakai root cause+judul+severity
+[33m6cc804e[m HEAD@{4}: commit: fix: preserve manual root cause and dynamic CAPA generation
+[33m5b7d3a5[m HEAD@{5}: commit: feat: single-user auth simplification, presentation quota tracking, app-grid restructure
+[33m1d2e387[m HEAD@{6}: commit: refactor: ubah konvensi middleware ke proxy
+[33m5d5d28f[m HEAD@{7}: commit: feat: tambahkan pivot table dan chart analytics
+[33m33a78a4[m HEAD@{8}: Branch: renamed refs/heads/main to refs/heads/main
+[33m33a78a4[m HEAD@{10}: commit: feat: siapkan deployment aplikasi The Audit Crucible
+[33m57bc4ec[m HEAD@{11}: commit: fix: add browser-image-compression dependency
+[33mc51f9a6[m HEAD@{12}: commit: fix: add date-fns dependency and update import
+[33m9195c9e[m HEAD@{13}: commit: chore: remove .next directory from tracking
+[33m582f461[m HEAD@{14}: Branch: renamed refs/heads/main to refs/heads/main
+[33m582f461[m HEAD@{16}: Branch: renamed refs/heads/main to refs/heads/main
+[33m582f461[m HEAD@{18}: Branch: renamed refs/heads/main to refs/heads/main
+[33m582f461[m HEAD@{20}: commit: feat: initial commit - setup database schema & dynamic form
+[33m29b67b2[m HEAD@{21}: commit: feat: pembaruan UI dan modul audit
+[33m3150ce4[m HEAD@{22}: commit: feat: pembaruan fitur dan perbaikan prompt
+[33md516cc6[m HEAD@{23}: commit: security: remove .env.local from tracking

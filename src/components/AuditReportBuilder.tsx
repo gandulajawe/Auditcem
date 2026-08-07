@@ -328,7 +328,7 @@ export function AuditReportBuilder({
 
       const data = await res.json();
 
-     if (res.ok && data.success) {
+      if (res.ok && data.success) {
         // Root Cause is never touched here anymore — only Action Plan (and
         // the suggested issue category) come back from the AI.
         const aiActionPlan = data.actionPlan || "";
@@ -371,6 +371,7 @@ export function AuditReportBuilder({
       setAnalyzingFindingId(null);
     }
   }
+
   async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
