@@ -1,28 +1,35 @@
-// File: src/lib/sanitize.ts
-import DOMPurify from "isomorphic-dompurify";
+﻿// File: src/lib/sanitize.ts
+import sanitizeHtml from "sanitize-html";
 
 /**
  * Sanitizes input data to prevent XSS attacks.
  *
- * Uses DOMPurify (a real HTML parser, via isomorphic-dompurify so it also
- * runs server-side under Node) instead of hand-written regexes. Every field
- * sanitized here (finding descriptions, root cause, action plans, etc.) is
- * meant to be plain text, so we configure DOMPurify to strip ALL tags and
- * attributes — output is text content only, with no HTML surviving at all.
- * This closes bypasses that regex-based stripping is prone to (nested or
- * obfuscated markup, unusual attribute spacing/casing, HTML entity tricks,
- * malformed-but-browser-tolerant tag soup), because DOMPurify actually
- * parses the DOM tree rather than pattern-matching text.
+ * Uses sanitize-html (a real HTML parser built on htmlparser2, pure
+ * JavaScript with no native/DOM dependency) instead of hand-written
+ * regexes. Every field sanitized here (finding descriptions, root cause,
+ * action plans, etc.) is meant to be plain text, so we configure it to
+ * strip ALL tags and attributes — output is text content only, with no
+ * HTML surviving at all. This closes bypasses that regex-based stripping
+ * is prone to (nested or obfuscated markup, unusual attribute
+ * spacing/casing, HTML entity tricks, malformed-but-browser-tolerant tag
+ * soup), because the parser actually walks the tag tree rather than
+ * pattern-matching text.
+ *
+ * Deliberately NOT using isomorphic-dompurify/jsdom here: that combo pulls
+ * in an ESM-only transitive dependency that Next.js/Vercel repeatedly fails
+ * to resolve at build time (see kkomelin/isomorphic-dompurify#356, #394),
+ * even when marked as a serverExternalPackage. sanitize-html has no such
+ * requirement and bundles normally.
  */
 export function sanitizeString(input: string, maxLength: number = 2000): string {
   if (typeof input !== "string") return "";
 
-  let sanitized = DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
+  let sanitized = sanitizeHtml(input, {
+    allowedTags: [],
+    allowedAttributes: {},
   })
-    // DOMPurify with no allowed tags returns text content only, but we still
-    // strip stray null bytes and normalize whitespace defensively.
+    // sanitize-html with no allowed tags returns text content only, but we
+    // still strip stray null bytes and normalize whitespace defensively.
     .replace(/\0/g, "")
     .trim();
 
