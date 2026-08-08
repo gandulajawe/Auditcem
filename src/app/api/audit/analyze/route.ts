@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Root Cause is always manual — AI needs it as input, it must not invent one.
     if (!rootCause || rootCause.trim().length < 5) {
       return NextResponse.json(
         { success: false, error: "Isi Root Cause Analysis (akar masalah) secara manual terlebih dahulu (minimal 5 karakter) sebelum AI dapat menyusun Action Plan." },
